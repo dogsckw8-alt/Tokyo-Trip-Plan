@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>東京孝親之旅 2026</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { -webkit-tap-highlight-color: transparent; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen flex flex-col pb-10">
+
+  <!-- 頂部標題與同步狀態 -->
+  <header class="bg-slate-900 border-b border-slate-800 p-4 sticky top-0 z-30 shadow-lg">
+    <div class="flex justify-between items-center max-w-md mx-auto">
+      <div>
+        <h1 class="text-xl font-black text-amber-400 flex items-center gap-2">
+          <span>⛩️</span> 東京孝親 7 天行
+        </h1>
+        <p id="sync-status" class="text-xs text-slate-400 mt-0.5">⚡ 載入快取資料中...</p>
+      </div>
+      <button onclick="fetchLatestData(true)" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-xs px-3 py-2 rounded-xl text-slate-200 border border-slate-700 flex items-center gap-1 transition">
+        🔄 重新同步
+      </button>
+    </div>
+
+    <!-- Day 頁籤滑動選單 -->
+    <nav class="mt-3 flex overflow-x-auto gap-2 no-scrollbar max-w-md mx-auto py-1" id="day-tabs">
+      <!-- 由 JS 動態生成 Day 1 ~ Day 7 -->
+    </nav>
+  </header>
+
+  <!-- 行程時間軸區塊 -->
+  <main class="flex-1 max-w-md w-full mx-auto p-4 space-y-4" id="timeline-container">
+    <!-- 時間軸卡片由 JS 動態生成 -->
+  </main>
+
+  <!-- 詳情彈窗 Pop-up Modal -->
+  <div id="detail-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center hidden p-0 sm:p-4">
+    <div class="bg-slate-900 border border-slate-800 w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom duration-200">
+      
+      <!-- Modal Header -->
+      <div class="p-4 border-b border-slate-800 flex justify-between items-start bg-slate-900/90 sticky top-0">
+        <div>
+          <span id="modal-type-badge" class="px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider inline-block mb-1">類型</span>
+          <h2 id="modal-title" class="text-2xl font-black text-white leading-tight">名稱</h2>
+        </div>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-white p-2 text-2xl font-bold bg-slate-800 rounded-full w-10 h-10 flex items-center justify-center">✕</button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-5 overflow-y-auto space-y-4 text-slate-200 text-lg" id="modal-body">
+        <!-- 內容由 JS 根據類型動態注入 -->
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="p-4 border-t border-slate-800 bg-slate-900 flex gap-3" id="modal-footer">
+        <!-- 按鈕動態生成 -->
+      </div>
+    </div>
+  </div>
+
+  <!-- 圖片全螢幕放大 Lightbox Modal -->
+  <div id="image-lightbox" class="fixed inset-0 bg-black/95 z-50 hidden flex flex-col items-center justify-center p-4" onclick="closeLightbox()">
+    <img id="lightbox-img" src="" class="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl">
+    <p class="text-slate-400 text-sm mt-4">點擊任意處關閉圖片</p>
+  </div>
+
+  <script>
+    // ⚙️ 請在此處替換您 Apps Script 部署後的 Web App URL
+    const GAS_API_URL = "YOUR_GAS_WEB_APP_URL_HERE";
+
+    // 預設示範資料 (當無網路且尚未設定 GAS URL 時呈現)
+    const DEFAULT_DATA = {
+      updatedAt: "離線預設資料",
+      schedule: {
+        days: ["Day1_1213", "Day2_1214", "Day3_1215", "Day4_1216", "Day5_1217", "Day6_1218", "Day7_1219"],
+        timeline: [
+          { time: "09:00", items: { "Day1_1213": "T:成田機場➔淺草站" } },
+          { time: "11:30", items: { "Day1_1213": "R:tonkatsu.jp Omotesando" } },
+          { time: "14:00", items: { "Day1_1213": "S:明治神宮" } }
+        ]
+      },
+      restaurants: {
+        "tonkatsu.jp Omotesando": {
+          ID: "R1", Name: "tonkatsu.jp Omotesando", NavURL: "https://maps.app.goo.gl/j5Eby3DVEeNah13z7",
+          Area: "原宿/表參道", Hours: "11:30-15:30, 17:30-21:00", Category: "頂級炸豬排", Cost: "2,500 - 4,000 日圓",
+          BookingStatus: "🔴 現場排隊", CriticalTime: "⚠️ 建議 10:45–11:00 前抵達門口排隊（11:30 開店）",
+          MenuImgURL: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80",
+          Notes: "建議點選銘柄豚（品牌豬）套餐，肉質軟嫩極適合長輩品嚐！"
+        }
+      },
+      transports: {
+        "成田機場➔淺草站": {
+          ID: "T1", Name: "成田機場➔淺草站", NavURL: "https://maps.app.goo.gl/j5Eby3DVEeNah13z7",
+          Duration: "約 65 分鐘", PlatformTips: "搭乘京成 Skyaccess (往羽田機場方向)，直達淺草免轉乘。請確認車廂為 Access 特急。",
+          RouteImgURL: "https://images.unsplash.com/photo-1532105956626-9569c03602f6?auto=format&fit=crop&w=800&q=80"
+        }
+      },
+      attractions: {
+        "明治神宮": {
+          ID: "S1", Name: "明治神宮", NavURL: "https://maps.app.goo.gl/j5Eby3DVEeNah13z7",
+          Duration: "約 1.5 小時", Highlights: "供奉明治天皇與昭憲皇太后。入口的大鳥居由台灣千年扁柏打造，參道林蔭舒適，非常適合悠閒散步。",
+          PhotoTips: "大鳥居正前方、本殿中庭的大楠樹（夫婦楠）。"
+        }
+      }
+    };
+
+    let currentData = DEFAULT_DATA;
+    let selectedDayIndex = 0;
+
+    // 初始化頁面
+    window.addEventListener('DOMContentLoaded', () => {
+      loadCachedData();
+      if (GAS_API_URL && GAS_API_URL !== "YOUR_GAS_WEB_APP_URL_HERE") {
+        fetchLatestData(false);
+      }
+    });
+
+    // 1. 離線快取載入邏輯
+    function loadCachedData() {
+      const local = localStorage.getItem('tokyo_itinerary_cache');
+      if (local) {
+        try {
+          currentData = JSON.parse(local);
+          document.getElementById('sync-status').textContent = `⚡ 離線快取 (${currentData.updatedAt || '已更新'})`;
+        } catch (e) {
+          currentData = DEFAULT_DATA;
+        }
+      }
+      renderApp();
+    }
+
+    // 2. 從 GAS 背景 Fetch 最新資料
+    async function fetchLatestData(isManual = false) {
+      const statusEl = document.getElementById('sync-status');
+      if (isManual) statusEl.textContent = "🔄 正在讀取最新資料...";
+
+      try {
+        const res = await fetch(GAS_API_URL);
+        const json = await res.json();
+        if (json.status === 'success') {
+          currentData = json;
+          localStorage.setItem('tokyo_itinerary_cache', JSON.stringify(json));
+          statusEl.textContent = `✅ 已同步 (${json.updatedAt})`;
+          renderApp();
+        } else {
+          throw new Error(json.message);
+        }
+      } catch (err) {
+        console.warn("Fetch failed, using cache:", err);
+        statusEl.textContent = `⚠️ 連線失敗，保持離線資料`;
+      }
+    }
+
+    // 3. 渲染主介面
+    function renderApp() {
+      renderTabs();
+      renderTimeline();
+    }
+
+    // 4. 渲染 Day 滑動 Tab
+    function renderTabs() {
+      const tabsContainer = document.getElementById('day-tabs');
+      tabsContainer.innerHTML = '';
+      
+      const days = currentData.schedule.days || [];
+      days.forEach((dayKey, index) => {
+        // 解析 Day1_1213 -> Day 1 (12/13)
+        const parts = dayKey.split('_');
+        const dayNum = parts[0].replace('Day', 'Day ');
+        const dateStr = parts[1] ? `(${parts[1].slice(0,2)}/${parts[1].slice(2)})` : '';
+        
+        const isSelected = index === selectedDayIndex;
+        const btn = document.createElement('button');
+        btn.className = `flex-shrink-0 px-4 py-2.5 rounded-2xl font-bold text-base transition-all ${
+          isSelected 
+            ? 'bg-amber-400 text-slate-950 shadow-lg font-black scale-105' 
+            : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+        }`;
+        btn.innerHTML = `${dayNum} <span class="text-xs font-normal opacity-80">${dateStr}</span>`;
+        btn.onclick = () => {
+          selectedDayIndex = index;
+          renderApp();
+        };
+        tabsContainer.appendChild(btn);
+      });
+    }
+
+    // 5. 渲染垂直時間軸與低密度卡片
+    function renderTimeline() {
+      const container = document.getElementById('timeline-container');
+      container.innerHTML = '';
+
+      const days = currentData.schedule.days || [];
+      const currentDayKey = days[selectedDayIndex];
+      const timeline = currentData.schedule.timeline || [];
+
+      let hasItem = false;
+
+      timeline.forEach(slot => {
+        const itemRaw = slot.items[currentDayKey];
+        if (!itemRaw) return;
+
+        hasItem = true;
+        const parsed = parseCellContent(itemRaw);
+        
+        // 建立時間軸列卡片
+        const card = document.createElement('div');
+        card.className = "flex gap-3 items-start group";
+        
+        // 左側時間點
+        const timeEl = `<div class="w-16 flex-shrink-0 text-slate-400 font-mono font-bold text-lg pt-2 text-right">${slot.time}</div>`;
+
+        // 右側內容卡片
+        let cardBg = "bg-slate-900 border-slate-800";
+        let typeBadge = "";
+        let title = parsed.id;
+        let subtitle = "";
+
+        if (parsed.type === 'R') { // 餐廳
+          cardBg = "bg-amber-950/30 border-amber-500/50 hover:border-amber-400";
+          typeBadge = `<span class="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs px-2 py-0.5 rounded font-bold">🍔 餐廳</span>`;
+          const detail = currentData.restaurants[parsed.id] || {};
+          title = detail.Name || parsed.id;
+          subtitle = `${detail.BookingStatus || '現場排'} | ${detail.Area || '東京'}`;
+        } else if (parsed.type === 'T') { // 交通
+          cardBg = "bg-sky-950/30 border-sky-500/50 hover:border-sky-400";
+          typeBadge = `<span class="bg-sky-500/20 text-sky-300 border border-sky-500/30 text-xs px-2 py-0.5 rounded font-bold">🚆 交通</span>`;
+          const detail = currentData.transports[parsed.id] || {};
+          title = detail.Name || parsed.id;
+          subtitle = `⏱️ 車程: ${detail.Duration || '詳見內文'}`;
+        } else if (parsed.type === 'S') { // 景點
+          cardBg = "bg-emerald-950/30 border-emerald-500/50 hover:border-emerald-400";
+          typeBadge = `<span class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs px-2 py-0.5 rounded font-bold">⛩️ 景點</span>`;
+          const detail = currentData.attractions[parsed.id] || {};
+          title = detail.Name || parsed.id;
+          subtitle = `⏳ 建議停留: ${detail.Duration || '1-2 小時'}`;
+        }
+
+        const cardInner = `
+          <div onclick="openModal('${parsed.type}', '${parsed.id}')" 
+               class="flex-1 ${cardBg} border-2 rounded-2xl p-4 cursor-pointer active:scale-[0.98] transition shadow-md">
+            <div class="flex justify-between items-center mb-1">
+              ${typeBadge}
+              <span class="text-xs text-slate-400 font-bold">點擊看細節 ➔</span>
+            </div>
+            <h3 class="text-xl font-black text-white leading-snug">${title}</h3>
+            <p class="text-base text-slate-300 mt-1 font-medium">${subtitle}</p>
+          </div>
+        `;
+
+        card.innerHTML = timeEl + cardInner;
+        container.appendChild(card);
+      });
+
+      if (!hasItem) {
+        container.innerHTML = `
+          <div class="text-center py-16 text-slate-500">
+            <p class="text-4xl mb-2">☕</p>
+            <p class="text-lg">本日尚無排定行程</p>
+          </div>
+        `;
+      }
+    }
+
+    // 6. 剖析 Schedule Cell 內容 (格式: R:餐廳名, T:交通名, S:景點名)
+    function parseCellContent(str) {
+      if (str.startsWith('R:')) return { type: 'R', id: str.substring(2).trim() };
+      if (str.startsWith('T:')) return { type: 'T', id: str.substring(2).trim() };
+      if (str.startsWith('S:')) return { type: 'S', id: str.substring(2).trim() };
+      return { type: 'OTHER', id: str };
+    }
+
+    // 7. 開啟細節 Pop-up Modal
+    function openModal(type, id) {
+      const modal = document.getElementById('detail-modal');
+      const badge = document.getElementById('modal-type-badge');
+      const title = document.getElementById('modal-title');
+      const body = document.getElementById('modal-body');
+      const footer = document.getElementById('modal-footer');
+
+      body.innerHTML = '';
+      footer.innerHTML = '';
+
+      if (type === 'R') {
+        const item = currentData.restaurants[id] || { Name: id };
+        badge.className = "px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30";
+        badge.textContent = "🍔 餐廳細節";
+        title.textContent = item.Name || id;
+
+        body.innerHTML = `
+          ${item.CriticalTime ? `<div class="bg-amber-500/10 border-2 border-amber-500/40 p-3.5 rounded-xl text-amber-200 font-bold text-base leading-relaxed">${item.CriticalTime}</div>` : ''}
+          <div class="grid grid-cols-2 gap-3 text-base">
+            <div class="bg-slate-800/80 p-3 rounded-xl"><span class="text-slate-400 text-xs block">📍 地區</span><b class="text-white">${item.Area || '未填寫'}</b></div>
+            <div class="bg-slate-800/80 p-3 rounded-xl"><span class="text-slate-400 text-xs block">📅 預約狀態</span><b class="text-white">${item.BookingStatus || '現場排'}</b></div>
+            <div class="bg-slate-800/80 p-3 rounded-xl"><span class="text-slate-400 text-xs block">🍳 主打菜式</span><b class="text-white">${item.Category || '未填寫'}</b></div>
+            <div class="bg-slate-800/80 p-3 rounded-xl"><span class="text-slate-400 text-xs block">💰 人均消費</span><b class="text-white">${item.Cost || '未填寫'}</b></div>
+          </div>
+          <div class="bg-slate-800/50 p-3 rounded-xl"><span class="text-slate-400 text-xs block">🕒 營業時間</span><p class="text-white text-base">${item.Hours || '未填寫'}</p></div>
+          ${item.Notes ? `<div class="bg-slate-800/50 p-3 rounded-xl"><span class="text-slate-400 text-xs block">💬 備註貼心提醒</span><p class="text-slate-200 text-base leading-relaxed">${item.Notes}</p></div>` : ''}
+        `;
+
+        // 按鈕區
+        if (item.NavURL) {
+          footer.innerHTML += `<a href="${item.NavURL}" target="_blank" class="flex-1 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black py-3 px-4 rounded-xl text-center text-base flex items-center justify-center gap-2">🗺️ 地圖導航</a>`;
+        }
+        if (item.MenuImgURL) {
+          footer.innerHTML += `<button onclick="openLightbox('${item.MenuImgURL}')" class="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 px-4 rounded-xl text-center text-base border border-slate-700">🖼️ 查看菜單</button>`;
+        }
+
+      } else if (type === 'T') {
+        const item = currentData.transports[id] || { Name: id };
+        badge.className = "px-2.5 py-1 rounded-lg text-xs font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30";
+        badge.textContent = "🚆 交通資訊";
+        title.textContent = item.Name || id;
+
+        body.innerHTML = `
+          <div class="bg-sky-500/10 border-2 border-sky-500/40 p-3.5 rounded-xl text-sky-200 font-bold text-lg">⏱️ 預計車程：${item.Duration || '依現場情況'}</div>
+          ${item.PlatformTips ? `<div class="bg-slate-800/80 p-4 rounded-xl border border-slate-700"><span class="text-sky-300 text-xs font-bold block mb-1">💡 轉乘 / 月台 / 乘車提示</span><p class="text-white text-base leading-relaxed">${item.PlatformTips}</p></div>` : ''}
+        `;
+
+        if (item.NavURL) {
+          footer.innerHTML += `<a href="${item.NavURL}" target="_blank" class="flex-1 bg-sky-400 hover:bg-sky-300 text-slate-950 font-black py-3 px-4 rounded-xl text-center text-base flex items-center justify-center gap-2">🗺️ 開啟 Google Maps</a>`;
+        }
+        if (item.RouteImgURL) {
+          footer.innerHTML += `<button onclick="openLightbox('${item.RouteImgURL}')" class="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 px-4 rounded-xl text-center text-base border border-slate-700">🖼️ 路線/時刻表</button>`;
+        }
+
+      } else if (type === 'S') {
+        const item = currentData.attractions[id] || { Name: id };
+        badge.className = "px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
+        badge.textContent = "⛩️ 景點導覽";
+        title.textContent = item.Name || id;
+
+        body.innerHTML = `
+          <div class="bg-emerald-500/10 border-2 border-emerald-500/40 p-3.5 rounded-xl text-emerald-200 font-bold text-base">⏳ 建議停留：${item.Duration || '1 - 2 小時'}</div>
+          ${item.Highlights ? `<div class="bg-slate-800/80 p-4 rounded-xl border border-slate-700"><span class="text-emerald-300 text-xs font-bold block mb-1">📖 歷史/景點亮點 (教長輩怎麼看)</span><p class="text-slate-100 text-base leading-relaxed">${item.Highlights}</p></div>` : ''}
+          ${item.PhotoTips ? `<div class="bg-slate-800/80 p-4 rounded-xl border border-slate-700"><span class="text-amber-300 text-xs font-bold block mb-1">📸 最佳拍照點 Tips</span><p class="text-slate-100 text-base leading-relaxed">${item.PhotoTips}</p></div>` : ''}
+        `;
+
+        if (item.NavURL) {
+          footer.innerHTML += `<a href="${item.NavURL}" target="_blank" class="w-full bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-black py-3 px-4 rounded-xl text-center text-base flex items-center justify-center gap-2">🗺️ 導航至此景點</a>`;
+        }
+      }
+
+      modal.classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('detail-modal').classList.add('hidden');
+    }
+
+    // Lightbox 圖片放大邏輯
+    function openLightbox(url) {
+      const lightbox = document.getElementById('image-lightbox');
+      const img = document.getElementById('lightbox-img');
+      img.src = url;
+      lightbox.classList.remove('hidden');
+    }
+
+    function closeLightbox() {
+      document.getElementById('image-lightbox').classList.add('hidden');
+    }
+  </script>
+</body>
+</html>
