@@ -268,13 +268,28 @@
       }
     }
 
-    // 6. 剖析 Schedule Cell 內容 (格式: R:餐廳名, T:交通名, S:景點名)
-    function parseCellContent(str) {
-      if (str.startsWith('R:')) return { type: 'R', id: str.substring(2).trim() };
-      if (str.startsWith('T:')) return { type: 'T', id: str.substring(2).trim() };
-      if (str.startsWith('S:')) return { type: 'S', id: str.substring(2).trim() };
-      return { type: 'OTHER', id: str };
+// 智慧比對：自動辨識文字是餐廳、景點還是交通
+  function parseCellContent(str) {
+    let cleanStr = str.trim();
+  
+    // 處理帶有前綴的格式 (例 R:名代 宇奈とと, S:明治神宮, T:成田機場➔淺草站)
+    if (cleanStr.startsWith('R:')) return { type: 'R', id: cleanStr.substring(2).trim() };
+    if (cleanStr.startsWith('T:')) return { type: 'T', id: cleanStr.substring(2).trim() };
+    if (cleanStr.startsWith('S:')) return { type: 'S', id: cleanStr.substring(2).trim() };
+
+    // 無前綴時，自動查 Database 資料庫
+    if (currentData.restaurants && currentData.restaurants[cleanStr]) {
+      return { type: 'R', id: cleanStr };
     }
+    if (currentData.attractions && currentData.attractions[cleanStr]) {
+      return { type: 'S', id: cleanStr };
+    }
+    if (currentData.transports && currentData.transports[cleanStr]) {
+      return { type: 'T', id: cleanStr };
+  }
+
+      return { type: 'S', id: cleanStr }; // 預設當作景點/通用地點處理
+}
 
     // 7. 開啟細節 Pop-up Modal
     function openModal(type, id) {
