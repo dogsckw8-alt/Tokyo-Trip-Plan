@@ -91,13 +91,13 @@
 
         return `
           <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex gap-4 items-center">
-            <div class="text-xs font-bold text-amber-400 border-r border-slate-800 pr-3 w-14 text-center">
+            <div class="text-s font-bold text-amber-400 border-r border-slate-800 pr-3 w-14 text-center">
               ${slot.time}
             </div>
             <div class="flex-1">
               <div class="text-sm font-bold text-white">${itemName}</div>
-              ${detail.District ? `<span class="text-[30px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded mt-1 inline-block">${detail.District}</span>` : ''}
-              ${detail.AvgCost ? `<span class="text-[30px] text-slate-400 ml-2">消費: ¥${detail.AvgCost}</span>` : ''}
+              ${detail.District ? `<span class="text-[15px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded mt-1 inline-block">${detail.District}</span>` : ''}
+              ${detail.AvgCost ? `<span class="text-[15px] text-slate-400 ml-2">消費: ¥${detail.AvgCost}</span>` : ''}
             </div>
           </div>
         `;
