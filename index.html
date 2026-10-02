@@ -191,6 +191,30 @@
       return null;
     }
 
+
+function calcMultiLegFee(routeParts) {
+  let totalFee = 0;
+  let hasValidFee = false;
+
+  for (let i = 0; i < routeParts.length - 1; i++) {
+    const from = routeParts[i];
+    const to = routeParts[i + 1];
+    const info = findTransportInfo(`${from}➔${to}`, [from, to]);
+    
+    if (info && info.Fee !== undefined && info.Fee !== null && String(info.Fee).trim() !== '') {
+      const feeStr = String(info.Fee).trim();
+      const numMatch = feeStr.match(/\d+/);
+      if (numMatch) {
+        totalFee += parseInt(numMatch[0], 10);
+        hasValidFee = true;
+      }
+    }
+  }
+
+  return hasValidFee ? totalFee : null;
+}
+
+
     function renderTimeline(currentDayKey) {
       const container = document.getElementById('timeline-container');
       const timeline = currentData.schedule.timeline;
@@ -205,21 +229,33 @@
         const rawName = slot.items[currentDayKey];
         const isTransport = rawName.includes('→') || rawName.includes('➔');
 
-        if (isTransport) {
-          const cleanRoute = rawName.split('|')[0].trim();
-          const routeParts = cleanRoute.split(/→|➔/).map(p => p.trim());
-          const isMultiLeg = routeParts.length > 2;
+    if (isTransport) {
+  const cleanRoute = rawName.split('|')[0].trim();
+  const routeParts = cleanRoute.split(/→|➔/).map(p => p.trim());
+  const isMultiLeg = routeParts.length > 2;
 
-          const transInfo = findTransportInfo(cleanRoute, routeParts);
-          
-          let durationStr = isMultiLeg ? calcMultiLegTime(routeParts) : null;
-          if (!durationStr) {
-            durationStr = formatMins(transInfo.Time || transInfo.Duration);
-          }
+  const transInfo = findTransportInfo(cleanRoute, routeParts);
 
-          const feeBadge = formatFeeDisplay(transInfo.Fee);
+  let durationStr = isMultiLeg ? calcMultiLegTime(routeParts) : null;
+  if (!durationStr) {
+    durationStr = formatMins(transInfo.Time || transInfo.Duration);
+  }
 
-          return `
+  // ★ 修改：如果是多段轉乘，計算金額總合（0 + 1400 = 1400）
+  let feeVal = transInfo.Fee;
+  if (isMultiLeg) {
+    const multiFee = calcMultiLegFee(routeParts);
+    if (multiFee !== null) {
+      feeVal = multiFee;
+    }
+  }
+  const feeBadge = formatFeeDisplay(feeVal);
+
+  return `
+    <!-- 保持原本的 HTML return 内容不變 -->
+  `;
+}
+
             <div class="flex items-start gap-3 relative z-10">
               <div class="w-12 pt-2 flex-shrink-0 text-right">
                 <span class="text-xs font-black text-amber-400 bg-slate-900 px-1 py-0.5 rounded border border-amber-500/30">${slot.time}</span>
@@ -295,7 +331,6 @@
       const to = routeParts[routeParts.length - 1];
       if (tMap[`${from}➔${to}`]) return tMap[`${from}➔${to}`];
       if (tMap[`${from}→${to}`]) return tMap[`${from}→${to}`];
-      if (tMap[from]) return tMap[from];
 
       return {};
     }
