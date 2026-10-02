@@ -147,7 +147,6 @@
       return `${str} mins`;
     }
 
-    // 格式化交通費（區分 Pass 與 IC卡/交通票）
     function formatFeeDisplay(rawFee) {
       if (!rawFee && rawFee !== 0) return '';
       const str = String(rawFee).trim();
@@ -192,7 +191,6 @@
       return null;
     }
 
-    // 渲染一級時間軸 (L1)
     function renderTimeline(currentDayKey) {
       const container = document.getElementById('timeline-container');
       const timeline = currentData.schedule.timeline;
@@ -207,7 +205,6 @@
         const rawName = slot.items[currentDayKey];
         const isTransport = rawName.includes('→') || rawName.includes('➔');
 
-        // 1. 交通卡片
         if (isTransport) {
           const cleanRoute = rawName.split('|')[0].trim();
           const routeParts = cleanRoute.split(/→|➔/).map(p => p.trim());
@@ -251,14 +248,12 @@
           `;
         }
 
-        // 2. 地點/餐廳/景點卡片
         const dbItem = (currentData.restaurants && currentData.restaurants[rawName]) || 
                        (currentData.attractions && currentData.attractions[rawName]) || {};
 
         const titles = parseTitles(rawName, dbItem);
         const icon = getItemIcon(dbItem.Type || dbItem['Rest.Type'], rawName);
         const reservationBadge = getReservationBadge(dbItem.reservation || dbItem.BookingStatus);
-
         const subSpotsList = parseSubSpots(dbItem.SubSpots);
 
         return `
@@ -329,7 +324,7 @@
       if (type.includes('Hotel') || type.includes('飯店') || type.includes('住宿')) return '🏨';
       if (type.includes('餐廳') || type.includes('燒肉') || type.includes('壽司')) return '🍴';
       if (type.includes('面包') || type.includes('甜點') || type.includes('咖啡')) return '☕';
-      if (type.includes('Spot') || type.includes('景點') || type.includes('神社')) return '⛩️';
+      if (type.includes('Spot') || type.includes('景點') || type.includes('神社') || type.includes('商店街')) return '⛩️';
       if (type.includes('Mall') || type.includes('購物') || type.includes('outlet')) return '🛍️';
       return '📍';
     }
@@ -345,7 +340,6 @@
       return `<span class="bg-amber-950/80 border border-amber-800 text-amber-300 text-xs font-bold px-2.5 py-1 rounded-lg">🟡 ${status}</span>`;
     }
 
-    // 開啟景點/餐廳詳情 Modal (L2)
     function openDetailModal(itemName) {
       const dbItem = (currentData.restaurants && currentData.restaurants[itemName]) || 
                      (currentData.attractions && currentData.attractions[itemName]) || {};
@@ -455,25 +449,75 @@
         `;
       }
 
+      // 🍡 強化版 SubSpots 區塊：連動資料庫與多維度資訊
       if (subSpots.length > 0) {
         alertHTML += `
-          <div class="bg-indigo-950/40 border border-indigo-800/80 p-3.5 rounded-2xl space-y-2">
-            <p class="text-xs font-black text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
-              <span>🍡</span>
-              <span>包含景點 / 掃街店家清單 (${subSpots.length}處)</span>
-            </p>
-            <div class="space-y-2 pt-1">
-              ${subSpots.map((spot, i) => `
-                <div class="flex items-center justify-between bg-slate-900/90 border border-slate-800 p-2.5 rounded-xl">
-                  <div class="flex items-center gap-2">
-                    <input type="checkbox" id="spot-${i}" class="w-4 h-4 accent-amber-400 rounded cursor-pointer">
-                    <label for="spot-${i}" class="text-sm font-bold text-slate-200 cursor-pointer">${spot}</label>
+          <div class="bg-indigo-950/40 border border-indigo-800/80 p-3.5 rounded-2xl space-y-2.5">
+            <div class="flex items-center justify-between">
+              <p class="text-xs font-black text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
+                <span>🍡</span>
+                <span>包含景點 / 掃街店家清單 (${subSpots.length}處)</span>
+              </p>
+              <span class="text-[10px] text-slate-400 font-bold">資料庫連動中</span>
+            </div>
+            
+            <div class="space-y-2.5 pt-1">
+              ${subSpots.map((spotName, i) => {
+                // 從 DB 交叉檢索子店家資料
+                const subDb = (currentData.restaurants && currentData.restaurants[spotName]) || 
+                              (currentData.attractions && currentData.attractions[spotName]) || {};
+                
+                const hasDbData = Object.keys(subDb).length > 0;
+                
+                // 地圖 URL：優先採用 DB 的 Gmap_URL / MapURL，若無則降級為預設搜尋
+                const subMapUrl = subDb.Gmap_URL || subDb.GmapURL || subDb.MapURL || subDb.Website || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(spotName)}`;
+                
+                const subType = subDb.Type || subDb['Rest.Type'] || '';
+                const subCost = subDb.AvgCost ? `¥${subDb.AvgCost}` : '';
+                const subRating = subDb.Tabelog評分 || subDb.Tabelog || '';
+                const subNotes = subDb.Comment || subDb.Notes || subDb['Book/Que_CriticalTime'] || '';
+                const subHours = subDb[weekKey] || subDb.Hours || '';
+
+                return `
+                  <div class="bg-slate-900/90 border border-slate-800 p-3 rounded-xl space-y-2 hover:border-slate-700 transition">
+                    <div class="flex items-start justify-between gap-2">
+                      <div class="flex items-start gap-2.5 flex-1">
+                        <input type="checkbox" id="spot-${i}" class="w-4 h-4 mt-1 accent-amber-400 rounded cursor-pointer flex-shrink-0">
+                        <div>
+                          <label for="spot-${i}" class="text-sm font-black text-slate-100 cursor-pointer hover:text-amber-300 leading-snug block">
+                            ${spotName}
+                          </label>
+                          ${(subType || subCost || subRating) ? `
+                            <div class="flex flex-wrap items-center gap-1.5 mt-1 text-[11px] font-bold">
+                              ${subType ? `<span class="bg-slate-800 text-slate-300 px-2 py-0.5 rounded">${subType}</span>` : ''}
+                              ${subCost ? `<span class="bg-emerald-950/80 text-emerald-300 px-2 py-0.5 rounded border border-emerald-800/60">${subCost}</span>` : ''}
+                              ${subRating ? `<span class="bg-amber-950/80 text-amber-300 px-2 py-0.5 rounded border border-amber-800/60">⭐ ${subRating}</span>` : ''}
+                            </div>
+                          ` : ''}
+                        </div>
+                      </div>
+                      
+                      <div class="flex flex-col gap-1.5 items-end flex-shrink-0">
+                        <a href="${subMapUrl}" target="_blank" class="text-xs text-amber-400 font-bold bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-lg hover:bg-amber-500/20 transition flex items-center gap-1">
+                          📍 導航
+                        </a>
+                        ${hasDbData ? `
+                          <button onclick="openDetailModal('${spotName}')" class="text-[11px] text-slate-300 font-bold bg-slate-800 border border-slate-700 px-2 py-0.5 rounded-lg hover:bg-slate-700 transition">
+                            🔍 詳情
+                          </button>
+                        ` : ''}
+                      </div>
+                    </div>
+
+                    ${(subHours || subNotes) ? `
+                      <div class="pt-1.5 border-t border-slate-800/80 text-xs text-slate-300 space-y-1">
+                        ${subHours ? `<p class="text-amber-300/90 font-medium">🕒 營業：${subHours}</p>` : ''}
+                        ${subNotes ? `<p class="text-slate-400 font-medium leading-relaxed">📝 ${subNotes}</p>` : ''}
+                      </div>
+                    ` : ''}
                   </div>
-                  <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(spot)}" target="_blank" class="text-xs text-amber-400 font-bold bg-amber-500/10 border border-amber-500/30 px-2 py-1 rounded hover:bg-amber-500/20">
-                    📍 導航
-                  </a>
-                </div>
-              `).join('')}
+                `;
+              }).join('')}
             </div>
           </div>
         `;
@@ -529,7 +573,6 @@
       showModal();
     }
 
-    // 開啟交通詳情 Modal
     function openTransportModal(fullRoute) {
       const routeParts = fullRoute.split(/→|➔/).map(p => p.trim());
       const isMultiLeg = routeParts.length > 2;
@@ -621,7 +664,7 @@
             ${liveUrl ? `
               <div class="pt-1">
                 <a href="${liveUrl}" target="_blank" class="inline-flex items-center gap-1 text-xs text-sky-400 hover:text-sky-300 font-bold underline">
-                  🔗 查看箱根實時巴士/交通位置
+                  🔗 查看實時交通位置
                 </a>
               </div>
             ` : ''}
