@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>東京 7 日 6 夜旅行</title>
+  <title>東京孝親 7 天行</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
@@ -20,7 +20,7 @@
   <!-- 頂部 Header -->
   <header class="sticky top-0 bg-slate-950/95 backdrop-blur-md z-30 px-4 py-3 border-b border-slate-800 flex justify-between items-center">
     <div>
-      <h1 class="text-2xl font-black text-amber-400 tracking-wide">⛩️ 東京 7 日 6 夜旅行</h1>
+      <h1 class="text-2xl font-black text-amber-400 tracking-wide">⛩️ 東京孝親 7 天行</h1>
     </div>
     <div class="flex items-center gap-2">
       <button onclick="fetchLatestData()" class="flex items-center gap-1.5 bg-slate-900 border border-slate-700 px-3 py-1.5 rounded-full active:scale-95 transition">
@@ -139,6 +139,41 @@
       renderApp();
     }
 
+    // 格式化時間，確保後附 "mins"
+    function formatMins(rawVal) {
+      if (!rawVal && rawVal !== 0) return '移動中';
+      const str = String(rawVal).trim();
+      if (!str) return '移動中';
+      if (str.toLowerCase().includes('min')) return str;
+      return `${str} mins`;
+    }
+
+    // 計算多段轉乘的總時間
+    function calcMultiLegTime(routeParts) {
+      let total = 0;
+      let legTimes = [];
+      let hasValid = false;
+
+      for (let i = 0; i < routeParts.length - 1; i++) {
+        const from = routeParts[i];
+        const to = routeParts[i + 1];
+        const info = findTransportInfo(`${from}➔${to}`, [from, to]);
+        const num = parseInt(info.Time || info.Duration || 0, 10);
+        if (!isNaN(num) && num > 0) {
+          total += num;
+          legTimes.push(num);
+          hasValid = true;
+        }
+      }
+
+      if (hasValid && routeParts.length > 2) {
+        return `${total} mins (${legTimes.join('+')})`;
+      } else if (hasValid) {
+        return `${total} mins`;
+      }
+      return null;
+    }
+
     // 渲染一級時間軸 (L1 Timeline)
     function renderTimeline(currentDayKey) {
       const container = document.getElementById('timeline-container');
@@ -154,18 +189,20 @@
         const rawName = slot.items[currentDayKey];
         const isTransport = rawName.includes('→') || rawName.includes('➔');
 
-        // 1. 交通節點：採用舒適開闊的卡片樣式
+        // 1. 交通卡片
         if (isTransport) {
           const cleanRoute = rawName.split('|')[0].trim();
-          const routeParts = cleanRoute.split(/→|➔/);
-          
-          let fromLoc = routeParts[0] ? routeParts[0].trim() : '';
-          let toLoc = routeParts[routeParts.length - 1] ? routeParts[routeParts.length - 1].trim() : '';
+          const routeParts = cleanRoute.split(/→|➔/).map(p => p.trim());
           const isMultiLeg = routeParts.length > 2;
 
-          // 匹配 Transport 資料
           const transInfo = findTransportInfo(cleanRoute, routeParts);
-          const duration = transInfo.Time || transInfo.Duration || '移動中';
+          
+          // 時間計算 (多段加總 vs 單段)
+          let durationStr = isMultiLeg ? calcMultiLegTime(routeParts) : null;
+          if (!durationStr) {
+            durationStr = formatMins(transInfo.Time || transInfo.Duration);
+          }
+
           const fee = transInfo.Fee ? `¥${transInfo.Fee}` : '';
 
           return `
@@ -188,7 +225,7 @@
                 </div>
 
                 <div class="flex flex-wrap items-center gap-2 mt-2 pt-2 border-t border-slate-800 text-xs font-bold text-slate-300">
-                  <span class="bg-amber-500/20 text-amber-300 px-2.5 py-1 rounded-lg">⏱️ ${duration}</span>
+                  <span class="bg-amber-500/20 text-amber-300 px-2.5 py-1 rounded-lg">⏱️ ${durationStr}</span>
                   ${fee ? `<span class="bg-slate-800 text-emerald-400 px-2.5 py-1 rounded-lg">💰 ${fee}</span>` : ''}
                   ${transInfo.Line ? `<span class="bg-slate-800 text-slate-300 px-2.5 py-1 rounded-lg">🚇 ${transInfo.Line}</span>` : ''}
                 </div>
@@ -233,7 +270,6 @@
       }).join('');
     }
 
-    // Transport 資料尋找邏輯
     function findTransportInfo(fullRoute, routeParts) {
       if (!currentData.transports) return {};
       const tMap = currentData.transports;
@@ -289,7 +325,6 @@
       return `<span class="bg-amber-950/80 border border-amber-800 text-amber-300 text-xs font-bold px-2.5 py-1 rounded-lg">🟡 ${status}</span>`;
     }
 
-    // 5. 開啟 L2 地點詳情 Modal (非餐廳不顯示 Tabelog)
     function openDetailModal(itemName) {
       const dbItem = (currentData.restaurants && currentData.restaurants[itemName]) || 
                      (currentData.attractions && currentData.attractions[itemName]) || {};
@@ -302,14 +337,12 @@
       const weekKey = WEEK_KEYS[dateObj.getDay()];
       const todayHours = dbItem[weekKey] || dbItem.Hours || '請參考官方說明';
 
-      // 判斷是否為餐廳類別
       const itemType = (dbItem.Type || dbItem['Rest.Type'] || '').toLowerCase();
       const isRestaurant = itemType.includes('餐廳') || itemType.includes('燒肉') || itemType.includes('壽司') || itemType.includes('拉麵') || dbItem.Tabelog評分 || dbItem.Tabelog;
       const isHotel = itemType.includes('hotel') || itemType.includes('飯店') || itemType.includes('住宿') || itemName.includes('HOTEL') || itemName.includes('飯店');
 
       document.getElementById('modal-transit-steps').classList.add('hidden');
 
-      // Header
       document.getElementById('modal-header').innerHTML = `
         <div class="flex items-center gap-2">
           <span class="text-3xl">${icon}</span>
@@ -320,7 +353,6 @@
         </div>
       `;
 
-      // 根據地點類型 (餐廳 / 飯店 / 景點) 動態客製化 2x2 Grid
       let gridHTML = `
         <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
           <p class="text-xs text-slate-400 font-bold">📍 所屬地區</p>
@@ -359,7 +391,6 @@
           </div>
         `;
       } else {
-        // 一般景點 / 購物
         gridHTML += `
           <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
             <p class="text-xs text-slate-400 font-bold">🕒 開放 / 營業時間 (${weekKey})</p>
@@ -378,7 +409,6 @@
 
       document.getElementById('modal-grid').innerHTML = gridHTML;
 
-      // 提醒事項 / 備註 / Plan B
       const criticalTime = dbItem['Book/Que_CriticalTime'] || dbItem.CriticalTime;
       const queueLevel = dbItem.Level_of_Que || dbItem.reservation;
       const planB = dbItem.Plan_B || dbItem.PlanB;
@@ -411,7 +441,6 @@
       }
       document.getElementById('modal-alerts').innerHTML = alertHTML;
 
-      // 優先採用 Gmap_URL
       const mapUrl = dbItem.Gmap_URL || dbItem.GmapURL || dbItem.MapURL || dbItem.Website || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(itemName)}`;
       const menuUrl = dbItem.Menu || dbItem.MenuImgURL;
 
@@ -431,9 +460,9 @@
       showModal();
     }
 
-    // 6. 開啟交通詳情 Modal (完整利用 Excel 轉乘、時刻表、乘車處欄位)
+    // 開啟交通詳情 Modal
     function openTransportModal(fullRoute) {
-      const routeParts = fullRoute.split(/→|➔/);
+      const routeParts = fullRoute.split(/→|➔/).map(p => p.trim());
       const isMultiLeg = routeParts.length > 2;
 
       document.getElementById('modal-header').innerHTML = `
@@ -443,29 +472,27 @@
         <p class="text-lg text-amber-400 font-extrabold mt-1">${routeParts.join(' ➔ ')}</p>
       `;
 
-      // 搜尋匹配的 Transport 資料列
       let segments = [];
       if (isMultiLeg) {
-        // 多段轉乘拆解
         for (let i = 0; i < routeParts.length - 1; i++) {
-          const from = routeParts[i].trim();
-          const to = routeParts[i + 1].trim();
+          const from = routeParts[i];
+          const to = routeParts[i + 1];
           const info = findTransportInfo(`${from}➔${to}`, [from, to]);
           segments.push({ from, to, info });
         }
       } else {
-        const from = routeParts[0].trim();
-        const to = routeParts[1] ? routeParts[1].trim() : '';
+        const from = routeParts[0];
+        const to = routeParts[1] || '';
         const info = findTransportInfo(fullRoute, routeParts);
         segments.push({ from, to, info });
       }
 
-      // 渲染轉乘/行程分段
       const stepsContainer = document.getElementById('modal-transit-steps');
       stepsContainer.classList.remove('hidden');
 
       stepsContainer.innerHTML = segments.map((seg, idx) => {
         const info = seg.info || {};
+        const timeFormatted = formatMins(info.Time || info.Duration);
         const timetables = (info.Timetable || info['時刻表'] || '').split('/').filter(Boolean);
         const liveUrl = info.LiveUrl || info.Link2 || info['實時位置連結'];
 
@@ -473,7 +500,7 @@
           <div class="bg-slate-800/90 border border-slate-700 p-4 rounded-2xl space-y-2">
             <div class="flex justify-between items-center border-b border-slate-700/80 pb-2">
               <span class="text-xs font-black bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-md">第 ${idx + 1} 段移動</span>
-              <span class="text-xs font-bold text-slate-400">⏱️ ${info.Time || info.Duration || '依現場車況'}</span>
+              <span class="text-xs font-bold text-slate-400">⏱️ ${timeFormatted}</span>
             </div>
 
             <div class="text-base font-black text-white mt-1">
@@ -519,7 +546,6 @@
       document.getElementById('modal-grid').innerHTML = '';
       document.getElementById('modal-alerts').innerHTML = '';
 
-      // 導航按鈕
       const mainNavUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(routeParts[0])}&destination=${encodeURIComponent(routeParts[routeParts.length - 1])}`;
       
       document.getElementById('modal-actions').innerHTML = `
