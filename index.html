@@ -3,67 +3,155 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>東京 7 日 6 夜 旅行</title>
+  <title>東京 7 天 6 夜旅行</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* 長輩版字體與無障礙強化 */
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    /* 點擊卡片縮放反饋 */
+    .touch-card:active {
+      transform: scale(0.98);
+    }
+  </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen p-4">
+<body class="bg-slate-950 text-slate-100 min-h-screen pb-12 select-none">
 
-  <header class="max-w-md mx-auto flex justify-between items-center mb-4">
+  <!-- 頂部 Header (高對比大字 + 右上角微型同步指示器) -->
+  <header class="sticky top-0 bg-slate-950/95 backdrop-blur-md z-30 px-4 py-3 border-b border-slate-800 flex justify-between items-center">
     <div>
-      <h1 class="text-xl font-bold text-amber-400">⛩️ 東京 7 日 6 夜 旅行</h1>
-      <p id="sync-status" class="text-xs text-slate-400 mt-1">⚡ 載入中...</p>
+      <h1 class="text-2xl font-black text-amber-400 tracking-wide">⛩️ 東京 7 天 6 夜旅行</h1>
     </div>
-    <button onclick="fetchLatestData()" class="bg-slate-800 border border-slate-700 text-xs px-3 py-2 rounded-xl">
-      🔄 重新同步
-    </button>
+    <!-- 右上角小點同步指示器 -->
+    <div class="flex items-center gap-2">
+      <button onclick="fetchLatestData()" class="flex items-center gap-1.5 bg-slate-900 border border-slate-700 px-3 py-1.5 rounded-full active:scale-95 transition">
+        <span id="sync-dot" class="w-3 h-3 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span id="sync-text" class="text-xs text-slate-300 font-bold">已同步</span>
+      </button>
+    </div>
   </header>
 
-  <!-- Day 選單 -->
-  <nav id="day-tabs" class="max-w-md mx-auto flex gap-2 overflow-x-auto pb-2 mb-4"></nav>
+  <!-- 日期導航列 (雙行顯示: DAY X + 日期/星期) -->
+  <nav class="sticky top-[57px] bg-slate-950/95 backdrop-blur-md z-20 px-3 py-2 border-b border-slate-800">
+    <div id="day-tabs" class="flex gap-2.5 overflow-x-auto no-scrollbar pb-1">
+      <!-- 由 JS 動態生成雙行 Tab -->
+    </div>
+  </nav>
 
-  <!-- 時間軸區域 -->
-  <main id="timeline-container" class="max-w-md mx-auto space-y-3"></main>
+  <!-- 主內容區：貫穿式垂直時間軸 -->
+  <main class="max-w-md mx-auto px-4 pt-6 relative">
+    <!-- 貫穿全頁的左側時間軸線條 -->
+    <div class="absolute left-[39px] top-6 bottom-6 w-1 bg-slate-800 z-0"></div>
+
+    <!-- 時間軸卡片容器 -->
+    <div id="timeline-container" class="space-y-6 relative z-10">
+      <!-- 由 JS 動態生成 Timeline Cards -->
+    </div>
+  </main>
+
+  <!-- 二級彈窗：L2 Bottom Sheet Modal -->
+  <div id="modal-overlay" class="fixed inset-0 bg-black/80 z-50 flex flex-col justify-end hidden opacity-0 transition-opacity duration-200" onclick="closeModal(event)">
+    <div id="modal-sheet" class="bg-slate-900 border-t border-slate-700 rounded-t-3xl p-5 max-h-[88vh] overflow-y-auto space-y-5 transform translate-y-full transition-transform duration-300 shadow-2xl" onclick="event.stopPropagation()">
+      
+      <!-- 頂部拖拽條與關閉鈕 -->
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <div class="w-12 h-1.5 bg-slate-700 rounded-full mx-auto"></div>
+        <button onclick="closeModalDirect()" class="text-slate-400 hover:text-white p-1 text-2xl font-bold">✕</button>
+      </div>
+
+      <!-- Modal Header -->
+      <div id="modal-header" class="space-y-1">
+        <!-- 動態帶入 -->
+      </div>
+
+      <!-- 核心數據卡片網格 (Grid Layout) -->
+      <div id="modal-grid" class="grid grid-cols-2 gap-3 text-slate-200">
+        <!-- 動態帶入 -->
+      </div>
+
+      <!-- 高亮提醒區 (Critical Time & 備註/ Plan B) -->
+      <div id="modal-alerts" class="space-y-3">
+        <!-- 動態帶入 -->
+      </div>
+
+      <!-- 預留擴充區：菜單/時刻表圖片 Lightbox 燈箱預覽 -->
+      <div id="modal-media-preview" class="hidden">
+        <!-- 可放置動態載入的圖片預覽 -->
+      </div>
+
+      <!-- 吸底動作按鈕列 (高度 >= 48px) -->
+      <div id="modal-actions" class="sticky bottom-0 bg-slate-900 pt-3 pb-2 flex gap-3 z-10 border-t border-slate-800">
+        <!-- 動態帶入按鈕 -->
+      </div>
+    </div>
+  </div>
 
   <script>
-    // ⚙️ 請貼上您的 GAS Web App API 網址 (注意雙引號)
+    // ⚙️ 請貼上您的 Google Apps Script API 網址
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwYZib81VOZqyDWyrvVd_h6QrRmJFU_z9mlAXYynE9yOd5my_EKrcQMgGNQe_WPjczEPg/exec";
 
     let currentData = null;
     let selectedDayIndex = 0;
 
+    // 星期對照表
+    const WEEK_DAYS = ['(日)', '(一)', '(二)', '(三)', '(四)', '(五)', '(六)'];
+    const WEEK_KEYS = ['日', '一', '二', '三', '四', '五', '六'];
+
+    // 1. 初始化資料抓取
     async function fetchLatestData() {
-      const statusEl = document.getElementById('sync-status');
-      statusEl.textContent = "🔄 正在讀取最新資料...";
+      const dotEl = document.getElementById('sync-dot');
+      const textEl = document.getElementById('sync-text');
+      dotEl.className = "w-3 h-3 rounded-full bg-amber-400 animate-ping";
+      textEl.textContent = "讀取中...";
+
       try {
         const res = await fetch(GAS_API_URL);
         const json = await res.json();
         if (json.status === 'success') {
           currentData = json;
-          statusEl.textContent = `✅ 已同步 (${json.updatedAt})`;
+          dotEl.className = "w-3 h-3 rounded-full bg-emerald-400";
+          textEl.textContent = "已同步";
           renderApp();
         } else {
           throw new Error(json.message);
         }
       } catch (err) {
-        statusEl.textContent = `❌ 同步失敗: ${err.message}`;
+        dotEl.className = "w-3 h-3 rounded-full bg-rose-500";
+        textEl.textContent = "同步失敗";
+        console.error(err);
       }
     }
 
+    // 2. 渲染主頁面
     function renderApp() {
       if (!currentData || !currentData.schedule || !currentData.schedule.days.length) {
-        document.getElementById('timeline-container').innerHTML = '<div class="text-center text-slate-500 py-10">尚無行程資料</div>';
+        document.getElementById('timeline-container').innerHTML = '<div class="text-center text-slate-400 py-12 text-lg">尚無行程資料</div>';
         return;
       }
 
       const days = currentData.schedule.days;
+      
+      // 渲染雙行 Date Tab
       const tabsNav = document.getElementById('day-tabs');
-      tabsNav.innerHTML = days.map((day, idx) => `
-        <button onclick="selectDay(${idx})" class="px-3 py-1.5 text-xs font-bold rounded-lg whitespace-nowrap transition ${
-          idx === selectedDayIndex ? 'bg-amber-400 text-slate-950' : 'bg-slate-900 border border-slate-800 text-slate-300'
-        }">
-          DAY ${idx + 1} (${day.slice(5)})
-        </button>
-      `).join('');
+      tabsNav.innerHTML = days.map((dayStr, idx) => {
+        const dateObj = new Date(dayStr);
+        const dateShort = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
+        const weekDay = WEEK_DAYS[dateObj.getDay()] || '';
+        const isSelected = idx === selectedDayIndex;
+
+        return `
+          <button onclick="selectDay(${idx})" class="flex-shrink-0 px-4 py-2 rounded-2xl flex flex-col items-center transition-all ${
+            isSelected 
+              ? 'bg-amber-400 text-slate-950 font-black shadow-lg shadow-amber-400/20 scale-105' 
+              : 'bg-slate-900 border border-slate-800 text-slate-300 font-bold'
+          }">
+            <span class="text-xs tracking-wider opacity-80">DAY ${idx + 1}</span>
+            <span class="text-base font-black">${dateShort} ${weekDay}</span>
+          </button>
+        `;
+      }).join('');
 
       renderTimeline(days[selectedDayIndex]);
     }
@@ -73,35 +161,291 @@
       renderApp();
     }
 
+    // 3. 渲染一級時間軸 (L1 Timeline)
     function renderTimeline(currentDayKey) {
       const container = document.getElementById('timeline-container');
       const timeline = currentData.schedule.timeline;
-      
       const dayItems = timeline.filter(slot => slot.items[currentDayKey]);
 
       if (dayItems.length === 0) {
-        container.innerHTML = '<div class="text-center text-slate-400 py-10">☕ 本日尚無排定行程</div>';
+        container.innerHTML = '<div class="text-center text-slate-400 py-12 text-lg">☕ 本日尚無排定行程</div>';
         return;
       }
 
       container.innerHTML = dayItems.map(slot => {
-        const itemName = slot.items[currentDayKey];
-        const detail = (currentData.restaurants && currentData.restaurants[itemName]) || 
-                       (currentData.attractions && currentData.attractions[itemName]) || {};
+        const rawName = slot.items[currentDayKey];
+        const isTransport = rawName.includes('→') || rawName.includes('➔');
+
+        // 任務一：如果是交通節點 -> 渲染為時間軸上的「交通膠囊按鈕」
+        if (isTransport) {
+          const cleanRoute = rawName.split('|')[0].trim();
+          const routeParts = cleanRoute.split(/→|➔/);
+          const fromLoc = routeParts[0] ? routeParts[0].trim() : '';
+          const toLoc = routeParts[1] ? routeParts[1].trim() : '';
+
+          // 匹配 Transport 資料表
+          const transInfo = (currentData.transports && (currentData.transports[`${fromLoc}➔${toLoc}`] || currentData.transports[fromLoc])) || {};
+          const duration = transInfo.Time || transInfo.Duration || '移動中';
+          const fee = transInfo.Fee ? `¥${transInfo.Fee}` : '';
+
+          return `
+            <div class="flex items-center my-3 relative z-10 pl-2">
+              <div class="w-12 flex-shrink-0 text-center">
+                <span class="text-xs font-black text-amber-400 bg-slate-900 px-1 rounded">${slot.time}</span>
+              </div>
+              <button onclick="openTransportModal('${fromLoc}', '${toLoc}')" class="touch-card ml-2 bg-slate-900 border border-amber-500/40 text-amber-300 text-sm font-bold px-4 py-2 rounded-full flex items-center gap-2 shadow-md active:scale-95 transition">
+                <span>🚌</span>
+                <span>${fromLoc} ➔ ${toLoc}</span>
+                <span class="bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full text-xs">${duration} ${fee}</span>
+              </button>
+            </div>
+          `;
+        }
+
+        // 任務二：一般地點/餐廳/景點/飯店卡片
+        const dbItem = (currentData.restaurants && currentData.restaurants[rawName]) || 
+                       (currentData.attractions && currentData.attractions[rawName]) || {};
+
+        const titles = parseTitles(rawName, dbItem);
+        const icon = getItemIcon(dbItem.Type, rawName);
+        const reservationBadge = getReservationBadge(dbItem.reservation || dbItem.BookingStatus);
 
         return `
-          <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex gap-4 items-center">
-            <div class="text-sm font-bold text-amber-400 border-r border-slate-800 pr-3 w-16 text-center">
-              ${slot.time}
+          <div class="flex items-start gap-3 relative z-10">
+            <!-- 時間點 -->
+            <div class="w-12 pt-2 flex-shrink-0 text-right">
+              <span class="text-base font-extrabold text-amber-400 block">${slot.time}</span>
             </div>
-            <div class="flex-1">
-              <div class="text-lg font-bold text-white">${itemName}</div>
-              ${detail.District ? `<span class="text-xs bg-slate-800 text-slate-300 px-2 py-0.5 rounded mt-1.5 inline-block">${detail.District}</span>` : ''}
-              ${detail.AvgCost ? `<span class="text-sm text-slate-400 ml-2">消費: ¥${detail.AvgCost}</span>` : ''}
+
+            <!-- 主卡片 (長輩大字體、高對比) -->
+            <div onclick="openDetailModal('${rawName}')" class="touch-card flex-1 bg-slate-900 border border-slate-800 hover:border-slate-700 p-4 rounded-2xl shadow-lg cursor-pointer transition-transform duration-150 active:scale-[0.98]">
+              
+              <!-- 頂部 Icon & 主標題 (中文/暱稱 18-20px) -->
+              <div class="flex items-start justify-between gap-2">
+                <div>
+                  <h2 class="text-xl font-black text-white leading-snug flex items-center gap-1.5">
+                    <span>${icon}</span>
+                    <span>${titles.mainTitle}</span>
+                  </h2>
+                  ${titles.subTitle ? `<p class="text-xs text-slate-400 mt-0.5 font-medium truncate max-w-[220px]">${titles.subTitle}</p>` : ''}
+                </div>
+              </div>
+
+              <!-- 底部 Pill 標籤欄 (大規格 14px) -->
+              <div class="flex flex-wrap items-center gap-2 mt-3 pt-2 border-t border-slate-800/80">
+                ${dbItem.District ? `<span class="bg-slate-800 text-slate-200 text-xs font-bold px-2.5 py-1 rounded-lg">📍 ${dbItem.District}</span>` : ''}
+                ${dbItem.AvgCost ? `<span class="bg-slate-800 text-amber-300 text-xs font-bold px-2.5 py-1 rounded-lg">💰 約 ¥${dbItem.AvgCost}</span>` : ''}
+                ${reservationBadge}
+              </div>
             </div>
           </div>
         `;
       }).join('');
+    }
+
+    // 4. 拆分主標題與外文副標題
+    function parseTitles(rawName, dbItem) {
+      let main = rawName;
+      let sub = dbItem.Name || '';
+
+      // 若原始名稱包含括號 (例如: 牛舌之檸檬 (淺草店))
+      if (rawName.includes('(') || rawName.includes('（')) {
+        main = rawName;
+      } else if (dbItem.RestType || dbItem['Rest.Type']) {
+        // 若有料理種類，輔助顯示
+        const type = dbItem.RestType || dbItem['Rest.Type'];
+        if (type && !rawName.includes(type)) {
+          sub = `${type} · ${sub}`;
+        }
+      }
+
+      if (main === sub) sub = '';
+      return { mainTitle: main, subTitle: sub };
+    }
+
+    // 分類 Icon 判斷
+    function getItemIcon(type, name) {
+      if (!type) {
+        if (name.includes('機場')) return '✈️';
+        if (name.includes('酒店') || name.includes('飯店') || name.includes('Guesthouse')) return '🏨';
+        return '📍';
+      }
+      if (type.includes('餐廳') || type.includes('早餐')) return '🥩';
+      if (type.includes('面包') || type.includes('甜點')) return '☕';
+      if (type.includes('Hotel')) return '🏨';
+      if (type.includes('Spot') || type.includes('景點')) return '⛩️';
+      if (type.includes('Mall')) return '🛍️';
+      return '📍';
+    }
+
+    // 預約/排隊狀態 Badges
+    function getReservationBadge(status) {
+      if (!status) return '';
+      if (status.includes('排隊') || status.includes('現場')) {
+        return `<span class="bg-rose-950/80 border border-rose-800 text-rose-300 text-xs font-bold px-2.5 py-1 rounded-lg">🔴 現場排隊</span>`;
+      }
+      if (status.includes('預約') || status.includes('不用排')) {
+        return `<span class="bg-emerald-950/80 border border-emerald-800 text-emerald-300 text-xs font-bold px-2.5 py-1 rounded-lg">🟢 已預約/不用排</span>`;
+      }
+      return `<span class="bg-amber-950/80 border border-amber-800 text-amber-300 text-xs font-bold px-2.5 py-1 rounded-lg">🟡 ${status}</span>`;
+    }
+
+    // 5. 開啟 L2 詳情彈窗 (Detail Modal / Bottom Sheet)
+    function openDetailModal(itemName) {
+      const dbItem = (currentData.restaurants && currentData.restaurants[itemName]) || 
+                     (currentData.attractions && currentData.attractions[itemName]) || {};
+
+      const titles = parseTitles(itemName, dbItem);
+      const icon = getItemIcon(dbItem.Type, itemName);
+      
+      // 計算當天星期幾對應的營業時間
+      const currentDateStr = currentData.schedule.days[selectedDayIndex];
+      const dateObj = new Date(currentDateStr);
+      const weekKey = WEEK_KEYS[dateObj.getDay()]; // '日', '一', '二'...
+      const todayHours = dbItem[weekKey] || dbItem.Hours || '請參考官方說明';
+
+      // Header
+      document.getElementById('modal-header').innerHTML = `
+        <div class="flex items-center gap-2">
+          <span class="text-3xl">${icon}</span>
+          <div>
+            <h2 class="text-2xl font-black text-white leading-tight">${titles.mainTitle}</h2>
+            ${titles.subTitle ? `<p class="text-sm text-slate-400 font-medium">${titles.subTitle}</p>` : ''}
+          </div>
+        </div>
+      `;
+
+      <!-- 2x3 數據網格 (大字體高對比) -->
+      document.getElementById('modal-grid').innerHTML = `
+        <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
+          <p class="text-xs text-slate-400 font-bold">📍 所屬地區</p>
+          <p class="text-base font-black text-white mt-0.5">${dbItem.District || '東京'}</p>
+        </div>
+        <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
+          <p class="text-xs text-slate-400 font-bold">🕒 今日營業時間 (${weekKey})</p>
+          <p class="text-base font-black text-amber-300 mt-0.5">${todayHours}</p>
+        </div>
+        <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
+          <p class="text-xs text-slate-400 font-bold">🍳 分類 / 類型</p>
+          <p class="text-base font-black text-white mt-0.5">${dbItem['Rest.Type'] || dbItem.Type || '景點'}</p>
+        </div>
+        <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
+          <p class="text-xs text-slate-400 font-bold">💰 平均消費</p>
+          <p class="text-base font-black text-emerald-400 mt-0.5">${dbItem.AvgCost ? `¥${dbItem.AvgCost}` : '依現場為準'}</p>
+        </div>
+        <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700 col-span-2">
+          <p class="text-xs text-slate-400 font-bold">⭐ Tabelog 評分</p>
+          <p class="text-base font-black text-amber-400 mt-0.5">${dbItem.Tabelog評分 || dbItem.Tabelog || '高評價推薦'}</p>
+        </div>
+      `;
+
+      // 關鍵時間 (Critical Time) / 備註 / Plan B
+      const criticalTime = dbItem['Book/Que_CriticalTime'] || dbItem.CriticalTime;
+      const queueLevel = dbItem.Level_of_Que || dbItem.reservation;
+      const planB = dbItem.Plan_B || dbItem.PlanB;
+      const comment = dbItem.Comment || dbItem.Notes;
+
+      let alertHTML = '';
+      if (criticalTime || queueLevel) {
+        alertHTML += `
+          <div class="bg-amber-500/10 border-l-4 border-amber-500 p-3.5 rounded-r-xl">
+            <p class="text-xs font-bold text-amber-400 uppercase tracking-wider">⚠️ 關鍵時間與排隊提示</p>
+            <p class="text-base font-black text-amber-200 mt-1">${criticalTime || ''} ${queueLevel ? `(${queueLevel})` : ''}</p>
+          </div>
+        `;
+      }
+      if (comment) {
+        alertHTML += `
+          <div class="bg-slate-800/60 p-3.5 rounded-xl border border-slate-700/80">
+            <p class="text-xs font-bold text-slate-400">📝 備註與必點推薦</p>
+            <p class="text-sm font-bold text-slate-200 mt-1 leading-relaxed">${comment}</p>
+          </div>
+        `;
+      }
+      if (planB) {
+        alertHTML += `
+          <div class="bg-indigo-950/50 border border-indigo-800/80 p-3.5 rounded-xl">
+            <p class="text-xs font-bold text-indigo-300">💡 備案 (Plan B)</p>
+            <p class="text-sm font-bold text-indigo-200 mt-1">${planB}</p>
+          </div>
+        `;
+      }
+      document.getElementById('modal-alerts').innerHTML = alertHTML;
+
+      // 底部動作按鈕 (高度 48px, Sticky)
+      const mapUrl = dbItem.MapURL || dbItem.Website || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(itemName)}`;
+      const menuUrl = dbItem.Menu || dbItem.MenuImgURL;
+
+      document.getElementById('modal-actions').innerHTML = `
+        <a href="${mapUrl}" target="_blank" class="flex-1 h-12 bg-amber-400 text-slate-950 font-black text-base rounded-xl flex items-center justify-center gap-2 shadow-lg active:scale-95 transition">
+          <span>📍</span>
+          <span>Google 地圖導航</span>
+        </a>
+        ${menuUrl ? `
+          <a href="${menuUrl}" target="_blank" class="w-1/3 h-12 bg-slate-800 border border-slate-700 text-slate-200 font-bold text-sm rounded-xl flex items-center justify-center gap-1 active:scale-95 transition">
+            <span>📖</span>
+            <span>菜單</span>
+          </a>
+        ` : ''}
+      `;
+
+      showModal();
+    }
+
+    // 6. 開啟交通簡化 Modal
+    function openTransportModal(from, to) {
+      const transInfo = (currentData.transports && (currentData.transports[`${from}➔${to}`] || currentData.transports[from])) || {};
+      
+      document.getElementById('modal-header').innerHTML = `
+        <h2 class="text-2xl font-black text-white">🚌 路線指南</h2>
+        <p class="text-lg text-amber-400 font-extrabold mt-1">${from} ➔ ${to}</p>
+      `;
+
+      document.getElementById('modal-grid').innerHTML = `
+        <div class="bg-slate-800 p-3 rounded-xl col-span-2">
+          <p class="text-xs text-slate-400 font-bold">⏱️ 預計車程與費用</p>
+          <p class="text-lg font-black text-white mt-1">${transInfo.Time || '約 60-90 分鐘'} / ${transInfo.Fee ? `¥${transInfo.Fee}` : 'IC 卡付款'}</p>
+        </div>
+      `;
+
+      document.getElementById('modal-alerts').innerHTML = `
+        ${transInfo.Remarks ? `<div class="bg-slate-800 p-3.5 rounded-xl text-sm font-bold text-slate-300">💬 備註: ${transInfo.Remarks}</div>` : ''}
+      `;
+
+      const shortcutUrl = transInfo.Shortcut || `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(from)}&destination=${encodeURIComponent(to)}`;
+      document.getElementById('modal-actions').innerHTML = `
+        <a href="${shortcutUrl}" target="_blank" class="w-full h-12 bg-amber-400 text-slate-950 font-black text-base rounded-xl flex items-center justify-center gap-2 active:scale-95 transition">
+          <span>🗺️</span>
+          <span>開啟 Google 路線導航</span>
+        </a>
+      `;
+
+      showModal();
+    }
+
+    // Modal 控制 logic
+    function showModal() {
+      const overlay = document.getElementById('modal-overlay');
+      const sheet = document.getElementById('modal-sheet');
+      overlay.classList.remove('hidden');
+      setTimeout(() => {
+        overlay.classList.remove('opacity-0');
+        sheet.classList.remove('translate-y-full');
+      }, 10);
+    }
+
+    function closeModal(e) {
+      if (e.target.id === 'modal-overlay') closeModalDirect();
+    }
+
+    function closeModalDirect() {
+      const overlay = document.getElementById('modal-overlay');
+      const sheet = document.getElementById('modal-sheet');
+      sheet.classList.add('translate-y-full');
+      overlay.classList.add('opacity-0');
+      setTimeout(() => {
+        overlay.classList.add('hidden');
+      }, 200);
     }
 
     window.addEventListener('DOMContentLoaded', fetchLatestData);
