@@ -369,40 +369,6 @@
       return `<span class="bg-amber-950/80 border border-amber-800 text-amber-300 text-xs font-bold px-2.5 py-1 rounded-lg">🟡 ${status}</span>`;
     }
 
-    /**
- * 處理多段營業時間格式化
- */
-function formatBusinessHours(hours) {
-  if (!hours) return '<span class="text-slate-400">未提供</span>';
-
-  let rawList = [];
-  if (Array.isArray(hours)) {
-    rawList = hours.map(h => String(h).trim()).filter(Boolean);
-  } else {
-    rawList = [String(hours).trim()];
-  }
-
-  // 支援多種半角/全角分隔符號（逗號、分號、頓號、斜線、換行、空格等）
-  const splitRegex = /[,;/|\n\r，；、／｜]|\s+(?=\d{1,2}[:：]|午|晚|早|夜)/;
-
-  const periodList = rawList
-    .flatMap(item => item.split(splitRegex))
-    .map(s => s.trim())
-    .filter(Boolean);
-
-  if (periodList.length === 0) return '<span class="text-slate-400">未提供</span>';
-
-  return periodList
-    .map((time, index) => `
-      <div class="flex items-center gap-1.5 ${index > 0 ? 'mt-1 pt-1 border-t border-slate-800/60' : ''}">
-        <span class="text-amber-400/90 text-xs">🕒</span>
-        <span class="text-slate-200 text-xs font-medium">${time}</span>
-      </div>
-    `)
-    .join('');
-}
-
-
     
     function openDetailModal(itemName) {
       const dbItem = (currentData.restaurants && currentData.restaurants[itemName]) || 
@@ -459,8 +425,9 @@ function formatBusinessHours(hours) {
         `;
       } else if (isRestaurant) {
         gridHTML += `
-          <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800">
-            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">🕒 今日營業時間 (${weekKey})</div>${formatBusinessHours(todayHours)}
+          <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
+            <p class="text-xs text-slate-400 font-bold">🕒 今日營業時間 (${weekKey})</p>
+            <p class="text-base font-black text-amber-300 mt-0.5">${todayHours}</p>
           </div>
           <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
             <p class="text-xs text-slate-400 font-bold">🍳 料理類型</p>
@@ -477,8 +444,9 @@ function formatBusinessHours(hours) {
         `;
       } else {
         gridHTML += `
-          <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800">
-            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">🕒 開放 / 營業時間 (${weekKey})</div>${formatBusinessHours(todayHours)}
+          <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
+            <p class="text-xs text-slate-400 font-bold">🕒 開放 / 營業時間 (${weekKey})</p>
+            <p class="text-base font-black text-amber-300 mt-0.5">${todayHours}</p>
           </div>
           <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
             <p class="text-xs text-slate-400 font-bold">🏷️ 類別</p>
@@ -569,7 +537,7 @@ function formatBusinessHours(hours) {
 
                     ${(subHours || subNotes) ? `
                       <div class="pt-1.5 border-t border-slate-800/80 text-xs text-slate-300 space-y-1">
-                        ${subHours ? `<div class="mt-1">${formatBusinessHours(subHours)}</div>` : ''}
+                        ${subHours ? `<p class="text-amber-300/90 font-medium">🕒 營業：${subHours}</p>` : ''}
                         ${subNotes ? `<p class="text-slate-400 font-medium leading-relaxed">📝 ${subNotes}</p>` : ''}
                       </div>
                     ` : ''}
