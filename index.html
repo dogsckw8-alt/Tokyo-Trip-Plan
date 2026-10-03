@@ -278,6 +278,7 @@ function getBetweenSpotsTransport(fromSpot, toSpot) {
       return hasValidFee ? totalFee : null;
     }
 // 1. 時間格式轉換工具 (轉換為當天總分鐘數)
+// 1. 時間格式轉換工具 (轉換為當天總分鐘數)
 function timeToMins(timeStr) {
   if (!timeStr || typeof timeStr !== 'string') return null;
   const match = timeStr.match(/(\d{1,2}):(\d{2})/);
@@ -285,64 +286,72 @@ function timeToMins(timeStr) {
   return parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
 }
 
-// 2. 三段式儲存格解析函數
+// 2. 三段式儲存格解析函數 (區分「開店/營業時間」與「排隊/抵達時間」)
 function parseCellContent(rawString) {
-  if (!rawString) return { spotName: '', subTitle: '', notice: '', customTime: null };
+  if (!rawString) return { spotName: '', subTitle: '', notice: '', customTime: null, isOpenTimeNotice: false };
   
   const parts = rawString.split('|').map(s => s.trim());
   const spotName = parts[0] || '';
   const subTitle = parts[1] || '';
   const notice = parts[2] || '';
   
-  // 自動以 Regex 捕捉第 3 段中的精確時間 (如 "10:45")
   let customTime = null;
   const timeMatch = notice.match(/(\d{1,2}:\d{2})/);
   if (timeMatch) {
     customTime = timeMatch[1];
   }
   
-  return { spotName, subTitle, notice, customTime };
+  // 判斷第 3 段是否為單純說明開店/營業時間 (如 "17:30營業"、"17:30開店")
+  const isOpenTimeNotice = /營業|開店|開門/.test(notice);
+
+  return { spotName, subTitle, notice, customTime, isOpenTimeNotice };
 }
 
-// 3. 計算卡片時間與狀態徽章 (包含網格容忍度與排隊邏輯)
-function getCardStatusBadge({ slotTime, dbOpenTime, customTime, notice, dbItem }) {
+// 3. 計算卡片時間與狀態徽章
+function getCardStatusBadge({ slotTime, dbItem, customTime, notice, isOpenTimeNotice, weekKey }) {
   const slotMins = timeToMins(slotTime);
-  const dbOpenMins = timeToMins(dbOpenTime);
-  const queueTime = customTime || (dbItem && dbItem.Que_CriticalTime);
+  
+  // 取得資料庫中的營業時間資訊 (優先讀取當天星期欄位，再讀取 Hours)
+  const dbHoursStr = dbItem ? (dbItem[weekKey] || dbItem.Hours || dbItem.OpenTime || '') : '';
+  const dbTimeMatch = dbHoursStr.match(/(\d{1,2}:\d{2})/);
+  
+  // 若 notice 寫了 "17:30營業"，優先採用 17:30 作為開店時間；否則採用資料庫時間
+  const openTimeStr = (isOpenTimeNotice && customTime) ? customTime : (dbTimeMatch ? dbTimeMatch[1] : null);
+  const dbOpenMins = timeToMins(openTimeStr);
 
-  // 情況 A：戰略性提早排隊 / 指定精確時間
-  if (queueTime) {
+  // 情況 A：指定精確排隊/抵達時間 (且非單純營業時間提醒)
+  if (customTime && !isOpenTimeNotice) {
     return `
       <span class="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
-        🔥 ${dbOpenTime ? dbOpenTime + '開店' : ''} (建議 ${queueTime} 抵達)
+        🔥 ${openTimeStr ? openTimeStr + '開店' : ''} (建議 ${customTime} 抵達)
       </span>
     `;
   }
 
-  // 情況 B：比對營業時間
+  // 情況 B：營業時間與 Excel 網格比對
   if (slotMins !== null && dbOpenMins !== null) {
     const diffMins = dbOpenMins - slotMins;
 
-    // 1. 網格局限容忍 (0 < 差距 <= 30 分鐘)：中性藍色提示
+    // 網格局限容忍 (0 < 差距 <= 30 分鐘，如 17:00 格放 17:30 開店)
     if (diffMins > 0 && diffMins <= 30) {
       return `
         <span class="bg-blue-950/80 text-blue-300 border border-blue-800/60 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
-          ℹ️ ${dbOpenTime} 開店
+          ℹ️ ${openTimeStr} 開店
         </span>
       `;
     }
 
-    // 2. 真正排錯時間 (差距 > 30 分鐘)：黃紅色警告
+    // 時間衝突 (差距 > 30 分鐘)
     if (diffMins > 30) {
       return `
         <span class="bg-rose-950/80 text-rose-300 border border-rose-800/60 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
-          ⚠️ ${dbOpenTime} 才開店
+          ⚠️ ${openTimeStr} 才開店
         </span>
       `;
     }
   }
 
-  // 情況 C：無時間衝突，僅有純注意事項
+  // 情況 C：無時間衝突的純文字注意事項
   if (notice) {
     return `
       <span class="bg-slate-800 text-amber-300 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
@@ -353,7 +362,73 @@ function getCardStatusBadge({ slotTime, dbOpenTime, customTime, notice, dbItem }
 
   return '';
 }
-    
+
+// 4. 順遊下一站模組 (已修正三段式字串純店名比對)
+function renderNextStepModule(itemName, currentDayKey) {
+  const timeline = currentData.schedule.timeline;
+  const dayItems = timeline.filter(slot => slot.items[currentDayKey]);
+  
+  const cleanTargetName = getCleanSpotName(itemName);
+  const currentIdx = dayItems.findIndex(slot => getCleanSpotName(slot.items[currentDayKey]) === cleanTargetName);
+
+  if (currentIdx === -1 || currentIdx >= dayItems.length - 1) {
+    return `
+      <div class="bg-slate-800/40 p-3 rounded-xl border border-slate-800 text-center text-xs text-slate-400 font-bold">
+        🏁 此站為本日行程最終站
+      </div>
+    `;
+  }
+
+  const nextSlot = dayItems[currentIdx + 1];
+  const nextRawName = nextSlot.items[currentDayKey];
+  const isNextTransport = nextRawName.includes('→') || nextRawName.includes('➔');
+
+  if (isNextTransport) {
+    const cleanRoute = getCleanSpotName(nextRawName);
+    return `
+      <div class="bg-amber-950/30 border border-amber-800/60 p-3.5 rounded-2xl space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-black text-amber-400 uppercase tracking-wider">⏭️ 順遊下一站（交通接駁）</span>
+          <span class="text-xs font-bold text-slate-400">⏰ ${nextSlot.time} 出發</span>
+        </div>
+        <div class="flex items-center justify-between gap-2 pt-1">
+          <div class="font-black text-white text-sm">🚌 ${cleanRoute}</div>
+          <button onclick="openTransportModal('${cleanRoute}')" class="bg-amber-400 text-slate-950 text-xs font-black px-3 py-1.5 rounded-xl shadow active:scale-95 transition">
+            查看路線 ➔
+          </button>
+        </div>
+      </div>
+    `;
+  } else {
+    const nextCleanName = getCleanSpotName(nextRawName);
+    const nextDbItem = (currentData.restaurants && currentData.restaurants[nextCleanName]) || 
+                       (currentData.attractions && currentData.attractions[nextCleanName]) || {};
+    const icon = getItemIcon(nextDbItem.Type || nextDbItem['Rest.Type'], nextCleanName);
+
+    return `
+      <div class="bg-slate-800/90 border border-slate-700 p-3.5 rounded-2xl space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-black text-amber-400 uppercase tracking-wider">⏭️ 順遊下一站</span>
+          <span class="text-xs font-bold text-slate-400">⏰ ${nextSlot.time} 到達</span>
+        </div>
+        <div class="flex items-center justify-between gap-2 pt-1">
+          <div class="flex items-center gap-2">
+            <span class="text-xl">${icon}</span>
+            <div>
+              <div class="font-black text-white text-sm leading-snug">${nextCleanName}</div>
+              ${nextDbItem.District ? `<span class="text-[11px] font-bold text-slate-400">📍 ${nextDbItem.District}</span>` : ''}
+            </div>
+          </div>
+          <button onclick="openDetailModal('${nextCleanName}', '${nextSlot.time}')" class="bg-slate-700 hover:bg-slate-600 text-amber-300 border border-amber-500/30 text-xs font-black px-3 py-1.5 rounded-xl active:scale-95 transition">
+            開啟卡片 ➔
+          </button>
+        </div>
+      </div>
+    `;
+  }
+}
+
+// 5. 時間軸主要渲染函數
 function renderTimeline(currentDayKey) {
   const container = document.getElementById('timeline-container');
   const timeline = currentData.schedule.timeline;
@@ -364,15 +439,18 @@ function renderTimeline(currentDayKey) {
     return;
   }
 
+  // 取得當前星期的 key (如 "日", "一") 供營業時間比對使用
+  const dateObj = new Date(currentDayKey);
+  const WEEK_KEYS = ['日', '一', '二', '三', '四', '五', '六'];
+  const weekKey = WEEK_KEYS[dateObj.getDay()] || '';
+
   container.innerHTML = dayItems.map((slot, idx) => {
     const rawName = slot.items[currentDayKey];
     const isTransport = rawName.includes('→') || rawName.includes('➔');
 
-    // ==========================================
-    // 分支 1：當前卡片是「獨立交通格」 (維持原樣)
-    // ==========================================
+    // 分支 1：獨立交通格
     if (isTransport) {
-      const cleanRoute = rawName.split('|')[0].trim();
+      const cleanRoute = getCleanSpotName(rawName);
       const routeParts = cleanRoute.split(/→|➔/).map(p => p.trim());
       const isMultiLeg = routeParts.length > 2;
 
@@ -420,30 +498,24 @@ function renderTimeline(currentDayKey) {
       `;
     }
 
-    // ==========================================
-    // 分支 2：當前卡片是「景點 / 餐廳 / 飯店」（修改核心區塊）
-    // ==========================================
-    
-    // 1. 使用三段式解析：取得店名、副標題、提醒與精確時間
-    const { spotName, subTitle, notice, customTime } = parseCellContent(rawName);
+    // 分支 2：景點 / 餐廳 / 飯店
+    const { spotName, subTitle, notice, customTime, isOpenTimeNotice } = parseCellContent(rawName);
 
-    // 2. 從 Database 尋找景點/餐廳資料
     const dbItem = (currentData.restaurants && currentData.restaurants[spotName]) || 
                    (currentData.attractions && currentData.attractions[spotName]) || {};
 
-    // 3. 計算顯示時間：若有精確時間 (如 10:45) 則覆蓋原本 1 小時網格時間 (11:00)
-    const displayTime = customTime || slot.time;
+    // 只有在「非營業時間提醒」的精確時間下，才覆蓋左側時間標籤
+    const displayTime = (customTime && !isOpenTimeNotice) ? customTime : slot.time;
 
-    // 4. 計算狀態徽章 (包含網格容忍、排隊策略與營業時間比對)
     const statusBadge = getCardStatusBadge({
       slotTime: slot.time,
-      dbOpenTime: dbItem.OpenTime,
+      dbItem,
       customTime,
       notice,
-      dbItem
+      isOpenTimeNotice,
+      weekKey
     });
 
-    // 5. 計算下一站是否需要插入移動區塊 (短程徒步 / 自動搜尋 transports)
     const nextSlot = dayItems[idx + 1];
     const nextRawName = nextSlot ? nextSlot.items[currentDayKey] : null;
     const nextIsTransport = nextRawName ? (nextRawName.includes('→') || nextRawName.includes('➔')) : false;
@@ -491,7 +563,7 @@ function renderTimeline(currentDayKey) {
       <div class="flex items-start gap-3 relative z-10">
         <!-- 左側時間標籤 -->
         <div class="w-12 pt-2 flex-shrink-0 text-right">
-          <span class="text-base font-extrabold ${customTime ? 'text-amber-300 underline underline-offset-2' : 'text-amber-400'} block">
+          <span class="text-base font-extrabold ${(customTime && !isOpenTimeNotice) ? 'text-amber-300 underline underline-offset-2' : 'text-amber-400'} block">
             ${displayTime}
           </span>
         </div>
@@ -529,7 +601,6 @@ function renderTimeline(currentDayKey) {
     `;
   }).join('');
 }
-
     
     function findTransportInfo(fullRoute, routeParts) {
       if (!currentData.transports) return {};
