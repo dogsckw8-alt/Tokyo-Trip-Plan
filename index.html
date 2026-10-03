@@ -277,7 +277,8 @@ function getBetweenSpotsTransport(fromSpot, toSpot) {
 
       return hasValidFee ? totalFee : null;
     }
-// 1. 時間格式轉換工具 (轉換為當天總分鐘數)
+
+    
 // 1. 時間格式轉換工具 (轉換為當天總分鐘數)
 function timeToMins(timeStr) {
   if (!timeStr || typeof timeStr !== 'string') return null;
@@ -286,14 +287,16 @@ function timeToMins(timeStr) {
   return parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
 }
 
-// 2. 三段式儲存格解析函數 (區分「開店/營業時間」與「排隊/抵達時間」)
+// 2. 強化版三段/多段式儲存格解析函數
 function parseCellContent(rawString) {
   if (!rawString) return { spotName: '', subTitle: '', notice: '', customTime: null, isOpenTimeNotice: false };
   
   const parts = rawString.split('|').map(s => s.trim());
   const spotName = parts[0] || '';
   const subTitle = parts[1] || '';
-  const notice = parts[2] || '';
+  
+  // 關鍵修復：把第 3 段之後的所有文字用空格合併 (兼容 "17:30|營業時間" 與 "17:30營業")
+  const notice = parts.slice(2).join(' ') || '';
   
   let customTime = null;
   const timeMatch = notice.match(/(\d{1,2}:\d{2})/);
@@ -301,7 +304,7 @@ function parseCellContent(rawString) {
     customTime = timeMatch[1];
   }
   
-  // 判斷第 3 段是否為單純說明開店/營業時間 (如 "17:30營業"、"17:30開店")
+  // 只要包含 營業、開店、開門 等關鍵字，即認定為營業時間提醒
   const isOpenTimeNotice = /營業|開店|開門/.test(notice);
 
   return { spotName, subTitle, notice, customTime, isOpenTimeNotice };
@@ -311,11 +314,11 @@ function parseCellContent(rawString) {
 function getCardStatusBadge({ slotTime, dbItem, customTime, notice, isOpenTimeNotice, weekKey }) {
   const slotMins = timeToMins(slotTime);
   
-  // 取得資料庫中的營業時間資訊 (優先讀取當天星期欄位，再讀取 Hours)
+  // 取得資料庫中的營業時間資訊 (優先讀取當天星期，再讀取 Hours)
   const dbHoursStr = dbItem ? (dbItem[weekKey] || dbItem.Hours || dbItem.OpenTime || '') : '';
   const dbTimeMatch = dbHoursStr.match(/(\d{1,2}:\d{2})/);
   
-  // 若 notice 寫了 "17:30營業"，優先採用 17:30 作為開店時間；否則採用資料庫時間
+  // 若 notice 含有營業時間提醒，優先採用該時間；否則讀取資料庫時間
   const openTimeStr = (isOpenTimeNotice && customTime) ? customTime : (dbTimeMatch ? dbTimeMatch[1] : null);
   const dbOpenMins = timeToMins(openTimeStr);
 
@@ -332,8 +335,8 @@ function getCardStatusBadge({ slotTime, dbItem, customTime, notice, isOpenTimeNo
   if (slotMins !== null && dbOpenMins !== null) {
     const diffMins = dbOpenMins - slotMins;
 
-    // 網格局限容忍 (0 < 差距 <= 30 分鐘，如 17:00 格放 17:30 開店)
-    if (diffMins > 0 && diffMins <= 30) {
+    // 網格局限容忍 (0 <= 差距 <= 30 分鐘，包含 17:00 或 17:30 格放 17:30 開店)
+    if (diffMins >= 0 && diffMins <= 30) {
       return `
         <span class="bg-blue-950/80 text-blue-300 border border-blue-800/60 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
           ℹ️ ${openTimeStr} 開店
@@ -362,7 +365,6 @@ function getCardStatusBadge({ slotTime, dbItem, customTime, notice, isOpenTimeNo
 
   return '';
 }
-
 // 4. 順遊下一站模組 (已修正三段式字串純店名比對)
 function renderNextStepModule(itemName, currentDayKey) {
   const timeline = currentData.schedule.timeline;
