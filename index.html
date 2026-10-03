@@ -158,14 +158,6 @@
       return `<span class="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2.5 py-1 rounded-lg">💰 交通票/IC卡 ¥${val}</span>`;
     }
 
-    function formatHoursDisplay(hoursStr) {
-      if (!hoursStr) return '請參考官方說明';
-      const str = String(hoursStr).trim();
-      if (!str) return '請參考官方說明';
-      // 將兩段時間（以空格、逗號或斜線隔開）格式化為換行顯示
-      return str.replace(/(\d{1,2}:\d{2}\s*[-~～]\s*\d{1,2}:\d{2})[\s,;/]+(\d{1,2}:\d{2}\s*[-~～]\s*\d{1,2}:\d{2})/g, '$1\n$2');
-    }
-
     function parseSubSpots(subSpotsStr) {
       if (!subSpotsStr) return [];
       return String(subSpotsStr)
@@ -434,7 +426,7 @@
         gridHTML += `
           <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
             <p class="text-xs text-slate-400 font-bold">🕒 今日營業時間 (${weekKey})</p>
-            <p class="text-base font-black text-amber-300 mt-0.5 whitespace-pre-line">${formatHoursDisplay(todayHours)}</p>
+            <p class="text-base font-black text-amber-300 mt-0.5">${todayHours}</p>
           </div>
           <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
             <p class="text-xs text-slate-400 font-bold">🍳 料理類型</p>
@@ -453,7 +445,7 @@
         gridHTML += `
           <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
             <p class="text-xs text-slate-400 font-bold">🕒 開放 / 營業時間 (${weekKey})</p>
-            <p class="text-base font-black text-amber-300 mt-0.5 whitespace-pre-line">${formatHoursDisplay(todayHours)}</p>
+            <p class="text-base font-black text-amber-300 mt-0.5">${todayHours}</p>
           </div>
           <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
             <p class="text-xs text-slate-400 font-bold">🏷️ 類別</p>
@@ -544,7 +536,7 @@
 
                     ${(subHours || subNotes) ? `
                       <div class="pt-1.5 border-t border-slate-800/80 text-xs text-slate-300 space-y-1">
-                        ${subHours ? `<p class="text-amber-300/90 font-medium whitespace-pre-line">🕒 營業：${formatHoursDisplay(subHours)}</p>` : ''}
+                        ${subHours ? `<p class="text-amber-300/90 font-medium">🕒 營業：${subHours}</p>` : ''}
                         ${subNotes ? `<p class="text-slate-400 font-medium leading-relaxed">📝 ${subNotes}</p>` : ''}
                       </div>
                     ` : ''}
