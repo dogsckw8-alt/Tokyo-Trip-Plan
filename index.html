@@ -430,6 +430,7 @@ function renderNextStepModule(itemName, currentDayKey) {
 
 // 5. 時間軸主要渲染函數
 function renderTimeline(currentDayKey) {
+  console.log('正在渲染 Day:', currentDayKey);
   const container = document.getElementById('timeline-container');
   const timeline = currentData.schedule.timeline;
   const dayItems = timeline.filter(slot => slot.items[currentDayKey]);
