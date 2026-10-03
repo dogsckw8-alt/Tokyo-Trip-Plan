@@ -154,11 +154,7 @@
     }
 
     
-// 清理景點名稱（去掉 | 之後的說明）
-function getCleanSpotName(rawName) {
-  if (!rawName) return '';
-  return rawName.split('|')[0].trim();
-}
+
 
 // 尋找景點 A ➔ 景點 B 在 transports 資料庫中的移動紀錄
 function getBetweenSpotsTransport(fromSpot, toSpot) {
@@ -1083,7 +1079,11 @@ function renderTimeline(currentDayKey) {
         sheet.classList.remove('translate-y-full');
       }, 10);
     }
-
+// 清理景點名稱（去掉 | 之後的說明）
+function getCleanSpotName(rawName) {
+  if (!rawName) return '';
+  return rawName.split('|')[0].trim();
+}
     function closeModal(e) {
       if (e.target.id === 'modal-overlay') closeModalDirect();
     }
