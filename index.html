@@ -277,7 +277,82 @@ function getBetweenSpotsTransport(fromSpot, toSpot) {
 
       return hasValidFee ? totalFee : null;
     }
+// 1. 時間格式轉換工具 (轉換為當天總分鐘數)
+function timeToMins(timeStr) {
+  if (!timeStr || typeof timeStr !== 'string') return null;
+  const match = timeStr.match(/(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  return parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
+}
 
+// 2. 三段式儲存格解析函數
+function parseCellContent(rawString) {
+  if (!rawString) return { spotName: '', subTitle: '', notice: '', customTime: null };
+  
+  const parts = rawString.split('|').map(s => s.trim());
+  const spotName = parts[0] || '';
+  const subTitle = parts[1] || '';
+  const notice = parts[2] || '';
+  
+  // 自動以 Regex 捕捉第 3 段中的精確時間 (如 "10:45")
+  let customTime = null;
+  const timeMatch = notice.match(/(\d{1,2}:\d{2})/);
+  if (timeMatch) {
+    customTime = timeMatch[1];
+  }
+  
+  return { spotName, subTitle, notice, customTime };
+}
+
+// 3. 計算卡片時間與狀態徽章 (包含網格容忍度與排隊邏輯)
+function getCardStatusBadge({ slotTime, dbOpenTime, customTime, notice, dbItem }) {
+  const slotMins = timeToMins(slotTime);
+  const dbOpenMins = timeToMins(dbOpenTime);
+  const queueTime = customTime || (dbItem && dbItem.Que_CriticalTime);
+
+  // 情況 A：戰略性提早排隊 / 指定精確時間
+  if (queueTime) {
+    return `
+      <span class="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
+        🔥 ${dbOpenTime ? dbOpenTime + '開店' : ''} (建議 ${queueTime} 抵達)
+      </span>
+    `;
+  }
+
+  // 情況 B：比對營業時間
+  if (slotMins !== null && dbOpenMins !== null) {
+    const diffMins = dbOpenMins - slotMins;
+
+    // 1. 網格局限容忍 (0 < 差距 <= 30 分鐘)：中性藍色提示
+    if (diffMins > 0 && diffMins <= 30) {
+      return `
+        <span class="bg-blue-950/80 text-blue-300 border border-blue-800/60 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
+          ℹ️ ${dbOpenTime} 開店
+        </span>
+      `;
+    }
+
+    // 2. 真正排錯時間 (差距 > 30 分鐘)：黃紅色警告
+    if (diffMins > 30) {
+      return `
+        <span class="bg-rose-950/80 text-rose-300 border border-rose-800/60 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
+          ⚠️ ${dbOpenTime} 才開店
+        </span>
+      `;
+    }
+  }
+
+  // 情況 C：無時間衝突，僅有純注意事項
+  if (notice) {
+    return `
+      <span class="bg-slate-800 text-amber-300 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
+        💡 ${notice}
+      </span>
+    `;
+  }
+
+  return '';
+}
     
 function renderTimeline(currentDayKey) {
   const container = document.getElementById('timeline-container');
@@ -571,82 +646,7 @@ function renderTimeline(currentDayKey) {
         `;
       }
     }
-// 1. 時間格式轉換工具 (轉換為當天總分鐘數)
-function timeToMins(timeStr) {
-  if (!timeStr || typeof timeStr !== 'string') return null;
-  const match = timeStr.match(/(\d{1,2}):(\d{2})/);
-  if (!match) return null;
-  return parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
-}
 
-// 2. 三段式儲存格解析函數
-function parseCellContent(rawString) {
-  if (!rawString) return { spotName: '', subTitle: '', notice: '', customTime: null };
-  
-  const parts = rawString.split('|').map(s => s.trim());
-  const spotName = parts[0] || '';
-  const subTitle = parts[1] || '';
-  const notice = parts[2] || '';
-  
-  // 自動以 Regex 捕捉第 3 段中的精確時間 (如 "10:45")
-  let customTime = null;
-  const timeMatch = notice.match(/(\d{1,2}:\d{2})/);
-  if (timeMatch) {
-    customTime = timeMatch[1];
-  }
-  
-  return { spotName, subTitle, notice, customTime };
-}
-
-// 3. 計算卡片時間與狀態徽章 (包含網格容忍度與排隊邏輯)
-function getCardStatusBadge({ slotTime, dbOpenTime, customTime, notice, dbItem }) {
-  const slotMins = timeToMins(slotTime);
-  const dbOpenMins = timeToMins(dbOpenTime);
-  const queueTime = customTime || (dbItem && dbItem.Que_CriticalTime);
-
-  // 情況 A：戰略性提早排隊 / 指定精確時間
-  if (queueTime) {
-    return `
-      <span class="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
-        🔥 ${dbOpenTime ? dbOpenTime + '開店' : ''} (建議 ${queueTime} 抵達)
-      </span>
-    `;
-  }
-
-  // 情況 B：比對營業時間
-  if (slotMins !== null && dbOpenMins !== null) {
-    const diffMins = dbOpenMins - slotMins;
-
-    // 1. 網格局限容忍 (0 < 差距 <= 30 分鐘)：中性藍色提示
-    if (diffMins > 0 && diffMins <= 30) {
-      return `
-        <span class="bg-blue-950/80 text-blue-300 border border-blue-800/60 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
-          ℹ️ ${dbOpenTime} 開店
-        </span>
-      `;
-    }
-
-    // 2. 真正排錯時間 (差距 > 30 分鐘)：黃紅色警告
-    if (diffMins > 30) {
-      return `
-        <span class="bg-rose-950/80 text-rose-300 border border-rose-800/60 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
-          ⚠️ ${dbOpenTime} 才開店
-        </span>
-      `;
-    }
-  }
-
-  // 情況 C：無時間衝突，僅有純注意事項
-  if (notice) {
-    return `
-      <span class="bg-slate-800 text-amber-300 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
-        💡 ${notice}
-      </span>
-    `;
-  }
-
-  return '';
-}
     function openDetailModal(itemName, slotTime = '') {
       const dbItem = (currentData.restaurants && currentData.restaurants[itemName]) || 
                      (currentData.attractions && currentData.attractions[itemName]) || {};
