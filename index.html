@@ -277,6 +277,8 @@ function getBetweenSpotsTransport(fromSpot, toSpot) {
 
       return hasValidFee ? totalFee : null;
     }
+
+    
 function renderTimeline(currentDayKey) {
   const container = document.getElementById('timeline-container');
   const timeline = currentData.schedule.timeline;
@@ -292,7 +294,7 @@ function renderTimeline(currentDayKey) {
     const isTransport = rawName.includes('→') || rawName.includes('➔');
 
     // ==========================================
-    // 情況 1：當前卡片是「獨立交通格」 (例如 成田機場➔淺草)
+    // 分支 1：當前卡片是「獨立交通格」 (維持原樣)
     // ==========================================
     if (isTransport) {
       const cleanRoute = rawName.split('|')[0].trim();
@@ -344,21 +346,38 @@ function renderTimeline(currentDayKey) {
     }
 
     // ==========================================
-    // 情況 2：當前卡片是「景點 / 餐廳 / 飯店」
+    // 分支 2：當前卡片是「景點 / 餐廳 / 飯店」（修改核心區塊）
     // ==========================================
     
-    // 1. 檢查下一站是否也是景點（中間沒有獨立交通格）
+    // 1. 使用三段式解析：取得店名、副標題、提醒與精確時間
+    const { spotName, subTitle, notice, customTime } = parseCellContent(rawName);
+
+    // 2. 從 Database 尋找景點/餐廳資料
+    const dbItem = (currentData.restaurants && currentData.restaurants[spotName]) || 
+                   (currentData.attractions && currentData.attractions[spotName]) || {};
+
+    // 3. 計算顯示時間：若有精確時間 (如 10:45) 則覆蓋原本 1 小時網格時間 (11:00)
+    const displayTime = customTime || slot.time;
+
+    // 4. 計算狀態徽章 (包含網格容忍、排隊策略與營業時間比對)
+    const statusBadge = getCardStatusBadge({
+      slotTime: slot.time,
+      dbOpenTime: dbItem.OpenTime,
+      customTime,
+      notice,
+      dbItem
+    });
+
+    // 5. 計算下一站是否需要插入移動區塊 (短程徒步 / 自動搜尋 transports)
     const nextSlot = dayItems[idx + 1];
     const nextRawName = nextSlot ? nextSlot.items[currentDayKey] : null;
     const nextIsTransport = nextRawName ? (nextRawName.includes('→') || nextRawName.includes('➔')) : false;
     const isShortWalkToNext = nextSlot && !nextIsTransport;
 
-    // 2. 自動向 transports 資料庫查詢移動時間，若查無資料則顯示預設徒步提示
     let shortWalkHTML = '';
     if (isShortWalkToNext) {
-      const currentClean = getCleanSpotName(rawName);
       const nextClean = getCleanSpotName(nextRawName);
-      const matchedTrans = getBetweenSpotsTransport(currentClean, nextClean);
+      const matchedTrans = getBetweenSpotsTransport(spotName, nextClean);
 
       if (matchedTrans) {
         const durationStr = formatMins(matchedTrans.Time || matchedTrans.Duration);
@@ -366,7 +385,7 @@ function renderTimeline(currentDayKey) {
         const lineInfo = matchedTrans.Line ? ` (${matchedTrans.Line})` : '';
 
         shortWalkHTML = `
-          <div onclick="openTransportModal('${currentClean}➔${nextClean}')" class="flex items-center justify-between bg-slate-900/60 border border-slate-800 hover:border-amber-500/40 px-3 py-2 rounded-xl cursor-pointer text-xs transition my-1">
+          <div onclick="openTransportModal('${spotName}➔${nextClean}')" class="flex items-center justify-between bg-slate-900/60 border border-slate-800 hover:border-amber-500/40 px-3 py-2 rounded-xl cursor-pointer text-xs transition my-1">
             <div class="flex items-center gap-2 text-slate-300 font-bold">
               <span class="text-amber-400">🚶</span>
               <span>移動至 <strong class="text-amber-300">${nextClean}</strong>${lineInfo}</span>
@@ -381,59 +400,62 @@ function renderTimeline(currentDayKey) {
         shortWalkHTML = `
           <div class="flex items-center gap-2 pl-2 text-xs font-bold text-slate-400 py-1">
             <span class="w-2 h-2 rounded-full bg-slate-600 animate-ping"></span>
-            <span>🚶 短程移動 / 徒步前往下一站</span>
+            <span>🚶 短程移動 / 徒步前往下一站（約 3 - 8 分鐘）</span>
           </div>
         `;
       }
     }
 
-    // 取得景點資料庫紀錄
-    const dbItem = (currentData.restaurants && currentData.restaurants[rawName]) || 
-                   (currentData.attractions && currentData.attractions[rawName]) || {};
-
-    const titles = parseTitles(rawName, dbItem);
-    const icon = getItemIcon(dbItem.Type || dbItem['Rest.Type'], rawName);
+    const icon = getItemIcon(dbItem.Type || dbItem['Rest.Type'], spotName);
     const reservationBadge = getReservationBadge(dbItem.reservation || dbItem.BookingStatus);
     const subSpotsList = parseSubSpots(dbItem.SubSpots);
-
     const durationMins = parseDurationMins(dbItem.Duration);
-    const departureTime = calcDepartureTime(slot.time, durationMins);
+    const departureTime = calcDepartureTime(displayTime, durationMins);
 
     return `
       <div class="flex items-start gap-3 relative z-10">
+        <!-- 左側時間標籤 -->
         <div class="w-12 pt-2 flex-shrink-0 text-right">
-          <span class="text-base font-extrabold text-amber-400 block">${slot.time}</span>
+          <span class="text-base font-extrabold ${customTime ? 'text-amber-300 underline underline-offset-2' : 'text-amber-400'} block">
+            ${displayTime}
+          </span>
         </div>
 
+        <!-- 右側主要卡片 -->
         <div class="flex-1 space-y-3">
-          <div onclick="openDetailModal('${rawName}', '${slot.time}')" class="touch-card bg-slate-900 border border-slate-800 hover:border-slate-700 p-4 rounded-2xl shadow-lg cursor-pointer transition duration-150 active:scale-[0.98]">
+          <div onclick="openDetailModal('${spotName}', '${displayTime}')" class="touch-card bg-slate-900 border border-slate-800 hover:border-slate-700 p-4 rounded-2xl shadow-lg cursor-pointer transition duration-150 active:scale-[0.98]">
             <div class="flex items-start justify-between gap-2">
               <div>
                 <h2 class="text-xl font-black text-white leading-snug flex items-center gap-1.5">
                   <span>${icon}</span>
-                  <span>${titles.mainTitle}</span>
+                  <span>${spotName}</span>
                 </h2>
-                ${titles.subTitle ? `<p class="text-xs text-slate-400 mt-0.5 font-medium truncate max-w-[220px]">${titles.subTitle}</p>` : ''}
+                ${subTitle ? `<p class="text-xs text-slate-400 mt-0.5 font-medium truncate max-w-[220px]">${subTitle}</p>` : ''}
               </div>
             </div>
 
+            <!-- 卡片底部標籤列 -->
             <div class="flex flex-wrap items-center gap-2 mt-3 pt-2 border-t border-slate-800/80">
               ${dbItem.District ? `<span class="bg-slate-800 text-slate-200 text-xs font-bold px-2.5 py-1 rounded-lg">📍 ${dbItem.District}</span>` : ''}
               <span class="bg-indigo-950/80 text-indigo-300 border border-indigo-800/60 text-xs font-bold px-2.5 py-1 rounded-lg">
                 ⏱️ 預計停留 ${durationMins} 分${departureTime ? ` (${departureTime} 離開)` : ''}
               </span>
+              ${statusBadge}
               ${dbItem.AvgCost ? `<span class="bg-slate-800 text-amber-300 text-xs font-bold px-2.5 py-1 rounded-lg">💰 約 ¥${dbItem.AvgCost}</span>` : ''}
               ${reservationBadge}
               ${subSpotsList.length > 0 ? `<span class="bg-indigo-950/90 border border-indigo-700/60 text-indigo-300 text-xs font-bold px-2.5 py-1 rounded-lg">🍡 包含 ${subSpotsList.length} 個店家/景點</span>` : ''}
             </div>
           </div>
 
+          <!-- 自動移動資訊塊 -->
           ${shortWalkHTML}
         </div>
       </div>
     `;
   }).join('');
 }
+
+    
     function findTransportInfo(fullRoute, routeParts) {
       if (!currentData.transports) return {};
       const tMap = currentData.transports;
@@ -549,7 +571,82 @@ function renderTimeline(currentDayKey) {
         `;
       }
     }
+// 1. 時間格式轉換工具 (轉換為當天總分鐘數)
+function timeToMins(timeStr) {
+  if (!timeStr || typeof timeStr !== 'string') return null;
+  const match = timeStr.match(/(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  return parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
+}
 
+// 2. 三段式儲存格解析函數
+function parseCellContent(rawString) {
+  if (!rawString) return { spotName: '', subTitle: '', notice: '', customTime: null };
+  
+  const parts = rawString.split('|').map(s => s.trim());
+  const spotName = parts[0] || '';
+  const subTitle = parts[1] || '';
+  const notice = parts[2] || '';
+  
+  // 自動以 Regex 捕捉第 3 段中的精確時間 (如 "10:45")
+  let customTime = null;
+  const timeMatch = notice.match(/(\d{1,2}:\d{2})/);
+  if (timeMatch) {
+    customTime = timeMatch[1];
+  }
+  
+  return { spotName, subTitle, notice, customTime };
+}
+
+// 3. 計算卡片時間與狀態徽章 (包含網格容忍度與排隊邏輯)
+function getCardStatusBadge({ slotTime, dbOpenTime, customTime, notice, dbItem }) {
+  const slotMins = timeToMins(slotTime);
+  const dbOpenMins = timeToMins(dbOpenTime);
+  const queueTime = customTime || (dbItem && dbItem.Que_CriticalTime);
+
+  // 情況 A：戰略性提早排隊 / 指定精確時間
+  if (queueTime) {
+    return `
+      <span class="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
+        🔥 ${dbOpenTime ? dbOpenTime + '開店' : ''} (建議 ${queueTime} 抵達)
+      </span>
+    `;
+  }
+
+  // 情況 B：比對營業時間
+  if (slotMins !== null && dbOpenMins !== null) {
+    const diffMins = dbOpenMins - slotMins;
+
+    // 1. 網格局限容忍 (0 < 差距 <= 30 分鐘)：中性藍色提示
+    if (diffMins > 0 && diffMins <= 30) {
+      return `
+        <span class="bg-blue-950/80 text-blue-300 border border-blue-800/60 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
+          ℹ️ ${dbOpenTime} 開店
+        </span>
+      `;
+    }
+
+    // 2. 真正排錯時間 (差距 > 30 分鐘)：黃紅色警告
+    if (diffMins > 30) {
+      return `
+        <span class="bg-rose-950/80 text-rose-300 border border-rose-800/60 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
+          ⚠️ ${dbOpenTime} 才開店
+        </span>
+      `;
+    }
+  }
+
+  // 情況 C：無時間衝突，僅有純注意事項
+  if (notice) {
+    return `
+      <span class="bg-slate-800 text-amber-300 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
+        💡 ${notice}
+      </span>
+    `;
+  }
+
+  return '';
+}
     function openDetailModal(itemName, slotTime = '') {
       const dbItem = (currentData.restaurants && currentData.restaurants[itemName]) || 
                      (currentData.attractions && currentData.attractions[itemName]) || {};
