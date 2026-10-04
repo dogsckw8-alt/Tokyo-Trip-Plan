@@ -904,8 +904,8 @@ function renderTimeline(currentDayKey) {
                               (currentData.attractions && currentData.attractions[spotName]) || {};
                 
                 const hasDbData = Object.keys(subDb).length > 0;
-                const subMapUrl = subDb.Gmap_URL || subDb.GmapURL || subDb.MapURL || subDb.Website || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(spotName)}`;
-                
+                // 優先使用 Shortcut，若無則依次讀取其他 Gmap 欄位，最後才退回關鍵字搜尋
+                const subMapUrl = subDb.Shortcut || subDb.Gmap_URL || subDb.GmapURL || subDb.MapURL || subDb.Website || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(spotName)}`;
                 const subType = subDb.Type || subDb['Rest.Type'] || '';
                 const subCost = subDb.AvgCost ? `¥${subDb.AvgCost}` : '';
                 const subRating = subDb.Tabelog評分 || subDb.Tabelog || '';
@@ -1108,19 +1108,21 @@ function renderTimeline(currentDayKey) {
           </div>
         `;
       }).join('');
-
       document.getElementById('modal-grid').innerHTML = '';
       document.getElementById('modal-alerts').innerHTML = '';
 
-      const mainNavUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(routeParts[0])}&destination=${encodeURIComponent(routeParts[routeParts.length - 1])}`;
+      // 1. 預設的 Google 兩點導航連結
+      const defaultNavUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(routeParts[0])}&destination=${encodeURIComponent(routeParts[routeParts.length - 1])}`;
+
+      // 2. 優先檢查該交通物件（例如 matchedTrans）是否有 Shortcut，有的話直接用，沒有才用預設導航
+      const mainNavUrl = (matchedTrans && matchedTrans.Shortcut) ? matchedTrans.Shortcut : defaultNavUrl;
 
       document.getElementById('modal-actions').innerHTML = `
-        <a href="${mainNavUrl}" target="_blank" class="w-full h-12 bg-amber-400 text-slate-950 font-black text-base rounded-xl flex items-center justify-center gap-2 active:scale-95 transition shadow-lg">
-          <span>🗺️</span>
-          <span>開啟 Google 路線導航</span>
-        </a>
+       <a href="${mainNavUrl}" target="_blank" class="w-full h-12 bg-amber-400 text-slate-950 font-black text-base rounded-xl flex items-center justify-center gap-2 active:scale-95 transition shadow-lg">
+        <span>🗺️</span>
+        <span>開啟 Google 路線導航</span>
+       </a>
       `;
-
       showModal();
     }
 
