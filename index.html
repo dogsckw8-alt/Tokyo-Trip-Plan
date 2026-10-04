@@ -904,8 +904,8 @@ function renderTimeline(currentDayKey) {
                               (currentData.attractions && currentData.attractions[spotName]) || {};
                 
                 const hasDbData = Object.keys(subDb).length > 0;
-                // 優先使用 Shortcut，若無則依次讀取其他 Gmap 欄位，最後才退回關鍵字搜尋
-                const subMapUrl = subDb.Shortcut || subDb.Gmap_URL || subDb.GmapURL || subDb.MapURL || subDb.Website || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(spotName)}`;
+                const subMapUrl = subDb.Gmap_URL || subDb.GmapURL || subDb.MapURL || subDb.Website || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(spotName)}`;
+                
                 const subType = subDb.Type || subDb['Rest.Type'] || '';
                 const subCost = subDb.AvgCost ? `¥${subDb.AvgCost}` : '';
                 const subRating = subDb.Tabelog評分 || subDb.Tabelog || '';
@@ -1109,36 +1109,20 @@ function renderTimeline(currentDayKey) {
         `;
       }).join('');
 
+      document.getElementById('modal-grid').innerHTML = '';
+      document.getElementById('modal-alerts').innerHTML = '';
 
-      
-function openTransportModal(routeStr) {
-  // 1. 拆分路線站點（例如 "表參道➔澀谷" 拆成 ["表參道", "澀谷"]）
-     const routeParts = routeStr.split(/[➔→]/).map(s => s.trim());
-  
-    // 2. 使用 findTransportInfo 或 getBetweenSpotsTransport 取得交通資料物件
-     const transInfo = findTransportInfo(routeStr, routeParts) || 
-                    getBetweenSpotsTransport(routeParts[0], routeParts[routeParts.length - 1]) || {};
+      const mainNavUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(routeParts[0])}&destination=${encodeURIComponent(routeParts[routeParts.length - 1])}`;
 
-    document.getElementById('modal-grid').innerHTML = '';
-    document.getElementById('modal-alerts').innerHTML = '';
+      document.getElementById('modal-actions').innerHTML = `
+        <a href="${mainNavUrl}" target="_blank" class="w-full h-12 bg-amber-400 text-slate-950 font-black text-base rounded-xl flex items-center justify-center gap-2 active:scale-95 transition shadow-lg">
+          <span>🗺️</span>
+          <span>開啟 Google 路線導航</span>
+        </a>
+      `;
 
-    // 3. 預設 Google 地圖兩點導航網址
-    const defaultNavUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(routeParts[0])}&destination=${encodeURIComponent(routeParts[routeParts.length - 1])}`;
-
-    // 4. 判斷邏輯：若資料庫中有 Shortcut 且不為空，優先使用 Shortcut，否則採用預設網址
-    const mainNavUrl = (transInfo.Shortcut && transInfo.Shortcut.trim() !== '') 
-                     ? transInfo.Shortcut.trim() 
-                     : defaultNavUrl;
-
-    // 5. 渲染導航按鈕
-    document.getElementById('modal-actions').innerHTML = `
-     <a href="${mainNavUrl}" target="_blank" class="w-full h-12 bg-amber-400 text-slate-950 font-black text-base rounded-xl flex items-center justify-center gap-2 active:scale-95 transition shadow-lg">
-       <span>🗺️</span>
-       <span>開啟 Google 路線導航</span>
-     </a>
-  `;
-  showModal();
-}
+      showModal();
+    }
 
     function showModal() {
       const overlay = document.getElementById('modal-overlay');
