@@ -89,8 +89,10 @@
       try {
         const res = await fetch(GAS_API_URL);
         const json = await res.json();
+        console.log("1. API 原始回傳資料:", json);
         if (json.status === 'success') {
           currentData = json;
+          console.log("2. 寫入後的 currentData:", currentData);
           dotEl.className = "w-3 h-3 rounded-full bg-emerald-400";
           textEl.textContent = "已同步";
           renderApp();
