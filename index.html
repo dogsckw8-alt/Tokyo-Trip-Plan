@@ -1108,23 +1108,37 @@ function renderTimeline(currentDayKey) {
           </div>
         `;
       }).join('');
-      document.getElementById('modal-grid').innerHTML = '';
-      document.getElementById('modal-alerts').innerHTML = '';
 
-      // 1. 預設的 Google 兩點導航連結
-      const defaultNavUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(routeParts[0])}&destination=${encodeURIComponent(routeParts[routeParts.length - 1])}`;
 
-      // 2. 優先檢查該交通物件（例如 matchedTrans）是否有 Shortcut，有的話直接用，沒有才用預設導航
-      const mainNavUrl = (matchedTrans && matchedTrans.Shortcut) ? matchedTrans.Shortcut : defaultNavUrl;
+      
+function openTransportModal(routeStr) {
+  // 1. 拆分路線站點（例如 "表參道➔澀谷" 拆成 ["表參道", "澀谷"]）
+     const routeParts = routeStr.split(/[➔→]/).map(s => s.trim());
+  
+    // 2. 使用 findTransportInfo 或 getBetweenSpotsTransport 取得交通資料物件
+     const transInfo = findTransportInfo(routeStr, routeParts) || 
+                    getBetweenSpotsTransport(routeParts[0], routeParts[routeParts.length - 1]) || {};
 
-      document.getElementById('modal-actions').innerHTML = `
-       <a href="${mainNavUrl}" target="_blank" class="w-full h-12 bg-amber-400 text-slate-950 font-black text-base rounded-xl flex items-center justify-center gap-2 active:scale-95 transition shadow-lg">
-        <span>🗺️</span>
-        <span>開啟 Google 路線導航</span>
-       </a>
-      `;
-      showModal();
-    }
+    document.getElementById('modal-grid').innerHTML = '';
+    document.getElementById('modal-alerts').innerHTML = '';
+
+    // 3. 預設 Google 地圖兩點導航網址
+    const defaultNavUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(routeParts[0])}&destination=${encodeURIComponent(routeParts[routeParts.length - 1])}`;
+
+    // 4. 判斷邏輯：若資料庫中有 Shortcut 且不為空，優先使用 Shortcut，否則採用預設網址
+    const mainNavUrl = (transInfo.Shortcut && transInfo.Shortcut.trim() !== '') 
+                     ? transInfo.Shortcut.trim() 
+                     : defaultNavUrl;
+
+    // 5. 渲染導航按鈕
+    document.getElementById('modal-actions').innerHTML = `
+     <a href="${mainNavUrl}" target="_blank" class="w-full h-12 bg-amber-400 text-slate-950 font-black text-base rounded-xl flex items-center justify-center gap-2 active:scale-95 transition shadow-lg">
+       <span>🗺️</span>
+       <span>開啟 Google 路線導航</span>
+     </a>
+  `;
+  showModal();
+}
 
     function showModal() {
       const overlay = document.getElementById('modal-overlay');
