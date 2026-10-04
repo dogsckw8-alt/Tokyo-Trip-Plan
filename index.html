@@ -520,24 +520,23 @@ function renderTimeline(currentDayKey) {
     }
 
     // 分支 2：景點 / 餐廳 / 飯店
-    const { spotName, subTitle, notice, customTime, isOpenTimeNotice } = parseCellContent(rawName);
+    const parsedNotice = parseCellContent(rawName);
+    const { spotName, subTitle } = parsedNotice;
 
     const dbItem = (currentData.restaurants && currentData.restaurants[spotName]) || 
                    (currentData.attractions && currentData.attractions[spotName]) || {};
 
-// 1. 確保前面有呼叫解析函數取得 parsedNotice（檔名變數依你原本的程式碼為主，如 rawString 或 cellText）
-const parsedNotice = parseCellContent(rawString);
+    // 左側時間標籤覆蓋邏輯：若有指定「排隊/建議抵達時間」，優先顯示排隊時間，否則顯示原本格子的時間
+    const displayTime = parsedNotice.queueTime || slot.time;
 
-// 2. 左側時間標籤覆蓋邏輯：若有指定「排隊/建議抵達時間」，優先顯示排隊時間，否則顯示原本格子的時間
-const displayTime = parsedNotice.queueTime || slot.time;
+    // 傳入 parsedNotice 產生狀態徽章
+    const statusBadge = getCardStatusBadge({
+      slotTime: slot.time,
+      dbItem,
+      parsedNotice,
+      weekKey
+    });
 
-// 3. 傳入 parsedNotice 產生狀態徽章
-const statusBadge = getCardStatusBadge({
-  slotTime: slot.time,
-  dbItem,
-  parsedNotice,
-  weekKey
-});
     const nextSlot = dayItems[idx + 1];
     const nextRawName = nextSlot ? nextSlot.items[currentDayKey] : null;
     const nextIsTransport = nextRawName ? (nextRawName.includes('→') || nextRawName.includes('➔')) : false;
@@ -585,7 +584,7 @@ const statusBadge = getCardStatusBadge({
       <div class="flex items-start gap-3 relative z-10">
         <!-- 左側時間標籤 -->
         <div class="w-12 pt-2 flex-shrink-0 text-right">
-          <span class="text-base font-extrabold ${(customTime && !isOpenTimeNotice) ? 'text-amber-300 underline underline-offset-2' : 'text-amber-400'} block">
+          <span class="text-base font-extrabold ${parsedNotice.queueTime ? 'text-amber-300 underline underline-offset-2' : 'text-amber-400'} block">
             ${displayTime}
           </span>
         </div>
@@ -623,7 +622,7 @@ const statusBadge = getCardStatusBadge({
     `;
   }).join('');
 }
-    
+
     function findTransportInfo(fullRoute, routeParts) {
       if (!currentData.transports) return {};
       const tMap = currentData.transports;
