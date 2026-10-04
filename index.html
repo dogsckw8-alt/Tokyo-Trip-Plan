@@ -285,74 +285,94 @@ function timeToMins(timeStr) {
   return parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
 }
 
-// 2. 強化版三段/多段式儲存格解析函數
+// 2. 強化版多段式與關鍵字解析函數
 function parseCellContent(rawString) {
-  if (!rawString) return { spotName: '', subTitle: '', notice: '', customTime: null, isOpenTimeNotice: false };
-  
+  if (!rawString) return { spotName: '', subTitle: '', notice: '', openTime: null, queueTime: null, leaveTime: null };
+
   const parts = rawString.split('|').map(s => s.trim());
   const spotName = parts[0] || '';
   const subTitle = parts[1] || '';
-  
-  // 關鍵修復：把第 3 段之後的所有文字用空格合併 (兼容 "17:30|營業時間" 與 "17:30營業")
   const notice = parts.slice(2).join(' ') || '';
-  
-  let customTime = null;
-  const timeMatch = notice.match(/(\d{1,2}:\d{2})/);
-  if (timeMatch) {
-    customTime = timeMatch[1];
-  }
-  
-  // 只要包含 營業、開店、開門 等關鍵字，即認定為營業時間提醒
-  const isOpenTimeNotice = /營業|開店|開門/.test(notice);
 
-  return { spotName, subTitle, notice, customTime, isOpenTimeNotice };
+  // 解析「營業/開店」時間 (例: 17:30營業)
+  const openMatch = notice.match(/(\d{1,2}:\d{2})\s*(?:營業|開店|開門)/);
+  // 解析「排隊/抵達/建議」時間 (例: 17:15排隊, 建議10:45抵達)
+  const queueMatch = notice.match(/(\d{1,2}:\d{2})\s*(?:排隊|抵達|集合)?/);
+  const hasQueueKeyword = /排隊|抵達|集合|建議/.test(notice);
+  // 解析「離開」時間 (例: 13:30離開, 13:30前離開)
+  const leaveMatch = notice.match(/(\d{1,2}:\d{2})\s*(?:前)?(?:必須)?離開/);
+
+  const openTime = openMatch ? openMatch[1] : null;
+  const leaveTime = leaveMatch ? leaveMatch[1] : null;
+
+  let queueTime = null;
+  // 只有在有排隊相關關鍵字，且該時間不等於營業/離開時間時採納
+  if (hasQueueKeyword && queueMatch) {
+    if (queueMatch[1] !== openTime && queueMatch[1] !== leaveTime) {
+      queueTime = queueMatch[1];
+    }
+  }
+  // 特殊情況：無「營業」關鍵字但寫了排隊 (例: 10:45排隊)
+  if (!openTime && !leaveTime && queueMatch && (hasQueueKeyword || notice.includes('排隊'))) {
+    queueTime = queueMatch[1];
+  }
+
+  return { spotName, subTitle, notice, openTime, queueTime, leaveTime };
 }
 
 // 3. 計算卡片時間與狀態徽章
-function getCardStatusBadge({ slotTime, dbItem, customTime, notice, isOpenTimeNotice, weekKey }) {
+function getCardStatusBadge({ slotTime, dbItem, parsedNotice, weekKey }) {
+  const { notice, openTime, queueTime, leaveTime } = parsedNotice;
   const slotMins = timeToMins(slotTime);
-  
-  // 取得資料庫中的營業時間資訊 (優先讀取當天星期，再讀取 Hours)
+
+  // 取得資料庫中的營業時間資訊
   const dbHoursStr = dbItem ? (dbItem[weekKey] || dbItem.Hours || dbItem.OpenTime || '') : '';
   const dbTimeMatch = dbHoursStr.match(/(\d{1,2}:\d{2})/);
-  
-  // 若 notice 含有營業時間提醒，優先採用該時間；否則讀取資料庫時間
-  const openTimeStr = (isOpenTimeNotice && customTime) ? customTime : (dbTimeMatch ? dbTimeMatch[1] : null);
-  const dbOpenMins = timeToMins(openTimeStr);
 
-  // 情況 A：指定精確排隊/抵達時間 (且非單純營業時間提醒)
-  if (customTime && !isOpenTimeNotice) {
+  // 優先採用表格內明確寫的營業時間，若無則採用資料庫時間
+  const finalOpenTime = openTime || (dbTimeMatch ? dbTimeMatch[1] : null);
+
+  // 情況 A：含有「離開時間」提醒 (例: 13:30離開)
+  if (leaveTime) {
     return `
-      <span class="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
-        🔥 ${openTimeStr ? openTimeStr + '開店' : ''} (建議 ${customTime} 抵達)
+      <span class="bg-rose-950/80 text-rose-300 border border-rose-800/60 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
+        ⚠️ ${leaveTime} 前須離開
       </span>
     `;
   }
 
-  // 情況 B：營業時間與 Excel 網格比對
+  // 情況 B：含有「排隊 / 建議抵達時間」 (例: 17:30營業,17:15排隊 或 10:45排隊)
+  if (queueTime) {
+    return `
+      <span class="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
+        🔥 ${finalOpenTime ? finalOpenTime + '開店 ' : ''}(建議 ${queueTime} 排隊)
+      </span>
+    `;
+  }
+
+  // 情況 C：單純營業時間提醒與網格時段比對
+  const dbOpenMins = timeToMins(finalOpenTime);
   if (slotMins !== null && dbOpenMins !== null) {
     const diffMins = dbOpenMins - slotMins;
 
-    // 網格局限容忍 (0 <= 差距 <= 30 分鐘，包含 17:00 或 17:30 格放 17:30 開店)
     if (diffMins >= 0 && diffMins <= 30) {
       return `
         <span class="bg-blue-950/80 text-blue-300 border border-blue-800/60 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
-          ℹ️ ${openTimeStr} 開店
+          ℹ️ ${finalOpenTime} 開店
         </span>
       `;
     }
 
-    // 時間衝突 (差距 > 30 分鐘)
     if (diffMins > 30) {
       return `
         <span class="bg-rose-950/80 text-rose-300 border border-rose-800/60 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
-          ⚠️ ${openTimeStr} 才開店
+          ⚠️ ${finalOpenTime} 才開店
         </span>
       `;
     }
   }
 
-  // 情況 C：無時間衝突的純文字注意事項
+  // 情況 D：無時間關鍵字的純文字注意事項
   if (notice) {
     return `
       <span class="bg-slate-800 text-amber-300 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
@@ -505,18 +525,19 @@ function renderTimeline(currentDayKey) {
     const dbItem = (currentData.restaurants && currentData.restaurants[spotName]) || 
                    (currentData.attractions && currentData.attractions[spotName]) || {};
 
-    // 只有在「非營業時間提醒」的精確時間下，才覆蓋左側時間標籤
-    const displayTime = (customTime && !isOpenTimeNotice) ? customTime : slot.time;
+// 1. 確保前面有呼叫解析函數取得 parsedNotice（檔名變數依你原本的程式碼為主，如 rawString 或 cellText）
+const parsedNotice = parseCellContent(rawString);
 
-    const statusBadge = getCardStatusBadge({
-      slotTime: slot.time,
-      dbItem,
-      customTime,
-      notice,
-      isOpenTimeNotice,
-      weekKey
-    });
+// 2. 左側時間標籤覆蓋邏輯：若有指定「排隊/建議抵達時間」，優先顯示排隊時間，否則顯示原本格子的時間
+const displayTime = parsedNotice.queueTime || slot.time;
 
+// 3. 傳入 parsedNotice 產生狀態徽章
+const statusBadge = getCardStatusBadge({
+  slotTime: slot.time,
+  dbItem,
+  parsedNotice,
+  weekKey
+});
     const nextSlot = dayItems[idx + 1];
     const nextRawName = nextSlot ? nextSlot.items[currentDayKey] : null;
     const nextIsTransport = nextRawName ? (nextRawName.includes('→') || nextRawName.includes('➔')) : false;
