@@ -63,13 +63,13 @@
         <div id="modal-grid" class="grid grid-cols-2 gap-3 text-slate-200"></div>
 
         <!-- 轉乘/行程分段明細（交通專用） -->
-        <div id="modal-transit-steps" class="space-y-3 hidden"></div>
+        <div id="modal-transit-steps" class="space-y-4 hidden"></div>
 
         <!-- 高亮提醒、故事、SubSpots、順遊下一站區域 -->
         <div id="modal-alerts" class="space-y-3"></div>
       </div>
 
-      <!-- 吸底動作按鈕列（獨立固定於底部，隔離滾動內容） -->
+      <!-- 吸底動作按鈕列（獨立固定於底部） -->
       <div id="modal-actions" class="p-4 bg-slate-900 border-t border-slate-800 flex gap-3 z-10 flex-shrink-0"></div>
     </div>
   </div>
@@ -150,7 +150,6 @@
       return rawName.split('|')[0].trim();
     }
 
-    // 停留時間與離開時間計算函數
     function parseDurationMins(durationVal) {
       if (!durationVal) return 60;
       const str = String(durationVal).trim();
@@ -164,7 +163,6 @@
       return match ? parseInt(match[0], 10) : 60;
     }
 
-    // 尋找景點 A ➔ 景點 B 在 transports 資料庫中的移動紀錄
     function getBetweenSpotsTransport(fromSpot, toSpot) {
       if (!currentData || !currentData.transports || !fromSpot || !toSpot) return null;
       
@@ -481,7 +479,6 @@
         const rawName = slot.items[currentDayKey];
         const isTransport = rawName.includes('→') || rawName.includes('➔');
 
-        // 分支 1：獨立交通格
         if (isTransport) {
           const cleanRoute = getCleanSpotName(rawName);
           const routeParts = cleanRoute.split(/→|➔/).map(p => p.trim());
@@ -531,7 +528,6 @@
           `;
         }
 
-        // 分支 2：景點 / 餐廳 / 飯店
         const parsedNotice = parseCellContent(rawName);
         const { spotName, subTitle } = parsedNotice;
 
@@ -561,7 +557,6 @@
             const durationStr = formatMins(matchedTrans.Time || matchedTrans.Duration);
             const lineInfo = matchedTrans.Line ? ` (${matchedTrans.Line})` : '';
 
-            // 需求2修訂：去除 Pass 涵蓋標籤，並放大文字 (text-sm)
             shortWalkHTML = `
               <div onclick="openTransportModal('${spotName}➔${nextClean}')" class="flex items-center justify-between bg-slate-900/60 border border-slate-800 hover:border-amber-500/40 px-3.5 py-2.5 rounded-xl cursor-pointer transition my-1">
                 <div class="flex items-center gap-2 text-slate-200 font-bold text-sm">
@@ -591,14 +586,12 @@
 
         return `
           <div class="flex items-start gap-3 relative z-10">
-            <!-- 左側時間標籤 -->
             <div class="w-12 pt-2 flex-shrink-0 text-right">
               <span class="text-base font-extrabold ${parsedNotice.queueTime ? 'text-amber-300 underline underline-offset-2' : 'text-amber-400'} block">
                 ${displayTime}
               </span>
             </div>
 
-            <!-- 右側主要卡片 -->
             <div class="flex-1 space-y-3">
               <div onclick="openDetailModal('${spotName}', '${displayTime}')" class="touch-card bg-slate-900 border border-slate-800 hover:border-slate-700 p-4 rounded-2xl shadow-lg cursor-pointer transition duration-150 active:scale-[0.98]">
                 <div class="flex items-start justify-between gap-2">
@@ -611,7 +604,6 @@
                   </div>
                 </div>
 
-                <!-- 卡片底部標籤列 -->
                 <div class="flex flex-wrap items-center gap-2 mt-3 pt-2 border-t border-slate-800/80">
                   ${dbItem.District ? `<span class="bg-slate-800 text-slate-200 text-sm font-bold px-2.5 py-1 rounded-lg">📍 ${dbItem.District}</span>` : ''}
                   <span class="bg-indigo-950/80 text-indigo-300 border border-indigo-800/60 text-sm font-bold px-2.5 py-1 rounded-lg">
@@ -624,7 +616,6 @@
                 </div>
               </div>
 
-              <!-- 自動移動資訊塊 -->
               ${shortWalkHTML}
             </div>
           </div>
@@ -638,11 +629,20 @@
 
       if (tMap[fullRoute]) return tMap[fullRoute];
 
-      const from = routeParts[0];
-      const to = routeParts[routeParts.length - 1];
+      const from = routeParts[0] ? routeParts[0].trim() : '';
+      const to = routeParts[routeParts.length - 1] ? routeParts[routeParts.length - 1].trim() : '';
+
       if (tMap[`${from}➔${to}`]) return tMap[`${from}➔${to}`];
       if (tMap[`${from}→${to}`]) return tMap[`${from}→${to}`];
 
+      for (const key in tMap) {
+        const item = tMap[key];
+        if (item && item.From && item.To) {
+          if (item.From.trim() === from && item.To.trim() === to) {
+            return item;
+          }
+        }
+      }
       return {};
     }
 
@@ -671,7 +671,7 @@
       if (type.includes('餐廳') || type.includes('燒肉') || type.includes('壽司')) return '🍴';
       if (type.includes('面包') || type.includes('甜點') || type.includes('咖啡')) return '☕';
       if (type.includes('Spot') || type.includes('景點') || type.includes('神社') || type.includes('商店街')) return '⛩️';
-      if (type.includes('Mall') || type.includes('購物') || type.includes('outlet')) return '🛍️';
+      if (type.includes('Mall') || type.includes('購物') || type.includes('outlet')) return '🛍️️';
       return '📍';
     }
 
@@ -819,7 +819,6 @@
                               (currentData.attractions && currentData.attractions[spotName]) || {};
                 
                 const hasDbData = Object.keys(subDb).length > 0;
-                // 需求 4.1：Subspot 卡片中的導航按鈕優先選擇 Gmap_URL，無資料再回退原方法
                 const subMapUrl = subDb.Gmap_URL || subDb.GmapURL || subDb.MapURL || subDb.Website || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(spotName)}`;
                 
                 const subType = subDb.Type || subDb['Rest.Type'] || '';
@@ -909,7 +908,9 @@
       const mapUrl = dbItem.Gmap_URL || dbItem.GmapURL || dbItem.MapURL || dbItem.Website || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(itemName)}`;
       const menuUrl = dbItem.Menu || dbItem.MenuImgURL;
 
-      document.getElementById('modal-actions').innerHTML = `
+      const actionsEl = document.getElementById('modal-actions');
+      actionsEl.classList.remove('hidden');
+      actionsEl.innerHTML = `
         <a href="${mapUrl}" target="_blank" class="flex-1 h-12 bg-amber-400 text-slate-950 font-black text-base rounded-xl flex items-center justify-center gap-2 shadow-lg active:scale-95 transition">
           <span>📍</span>
           <span>Google 地圖</span>
@@ -954,73 +955,100 @@
       const stepsContainer = document.getElementById('modal-transit-steps');
       stepsContainer.classList.remove('hidden');
 
-      // 需求 1 修訂：加大文字，保持在大於 text-xs 且不大於上一級標題（text-base/lg）
       stepsContainer.innerHTML = segments.map((seg, idx) => {
         const info = seg.info || {};
         const timeFormatted = formatMins(info.Time || info.Duration);
-        const timetables = (info.Timetable || info['時刻表'] || '').split('/').filter(Boolean);
-        const liveUrl = info.LiveUrl || info.Link2 || info['實時位置連結'];
+        const timetables = (info.Timetable || info['時刻表'] || '').split(/[,/]/).filter(Boolean);
+        const liveUrl = info.LiveUrl || info.Link2 || info['實時位置連結'] || info.Options;
         const routeTips = info.RouteTips || info.RouteGuide || info.WalkingTips || info['路線提示'];
         const videoUrl = info.VideoURL || info.Video;
 
+        // 費用標籤邏輯 (符合「改進想法2」)
+        let feeBadge = '';
+        if (info.Fee !== undefined && info.Fee !== null && String(info.Fee).trim() !== '') {
+          const feeStr = String(info.Fee).trim();
+          if (feeStr === '0' || feeStr.toLowerCase().includes('pass') || feeStr.includes('免')) {
+            feeBadge = `<span class="bg-emerald-950/80 border border-emerald-800 text-emerald-300 px-2 py-0.5 rounded text-xs font-bold flex items-center gap-1">🎫 Pass涵蓋 (¥0)</span>`;
+          } else {
+            const numMatch = feeStr.match(/\d+/);
+            const val = numMatch ? numMatch[0] : feeStr;
+            feeBadge = `<span class="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded text-xs font-bold flex items-center gap-1">💰 ¥${val}</span>`;
+          }
+        }
+
+        // 該段專屬導航網址 (符合「改進想法」)
+        const defaultSegNav = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(seg.from)}&destination=${encodeURIComponent(seg.to)}`;
+        const segNavUrl = info.Shortcut || info.ShortcutURL || info.Gmap_URL || defaultSegNav;
+
         return `
-          <div class="bg-slate-800/90 border border-slate-700 p-4 rounded-2xl space-y-3">
-            <div class="flex justify-between items-center border-b border-slate-700/80 pb-2">
-              <span class="text-sm font-black bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-md">第 ${idx + 1} 段移動</span>
-              <span class="text-sm font-bold text-slate-300">⏱️ ${timeFormatted}</span>
-            </div>
-
-            <div class="text-lg font-black text-white mt-1">
-              ${seg.from} <span class="text-amber-400">➔</span> ${seg.to}
-            </div>
-
-            ${info.Platform || info.DeparturePlatform ? `
-              <div class="text-sm text-amber-200 bg-amber-950/40 border border-amber-800/60 p-2.5 rounded-lg font-bold">
-                🏣 乘車處/月台：${info.Platform || info.DeparturePlatform}
-              </div>
-            ` : ''}
-
-            ${info.Line || info.RouteName ? `
-              <div class="text-sm text-slate-200 font-bold">
-                🚇 搭乘路線：<span class="text-white">${info.Line || info.RouteName}</span>
-              </div>
-            ` : ''}
-
-            ${routeTips ? `
-              <div class="bg-slate-900/90 p-3.5 rounded-xl border border-slate-700/80">
-                <p class="text-sm font-black text-amber-400 mb-1 flex items-center gap-1">🚶 步行/防迷路文字指引</p>
-                <p class="text-sm text-slate-100 leading-relaxed font-medium whitespace-pre-line">${routeTips}</p>
-              </div>
-            ` : ''}
-
-            ${videoUrl ? `
-              <div class="pt-1">
-                <a href="${videoUrl}" target="_blank" class="w-full py-2.5 bg-sky-950/80 hover:bg-sky-900 border border-sky-700 text-sky-200 text-sm font-black rounded-xl flex items-center justify-center gap-1.5 transition">
-                  <span>▶️</span> 觀看實景走法影片 (YouTube)
-                </a>
-              </div>
-            ` : ''}
-
-            ${timetables.length > 0 ? `
-              <div class="pt-1">
-                <p class="text-sm font-bold text-slate-300 mb-1.5">⏰ 建議班次時刻表：</p>
-                <div class="flex flex-wrap gap-2">
-                  ${timetables.map(t => `<span class="bg-slate-900 border border-slate-700 text-amber-300 text-sm font-black px-2.5 py-1 rounded-md">${t}</span>`).join('')}
+          <div class="space-y-3">
+            <div class="bg-slate-800/90 border border-slate-700 p-4 rounded-2xl space-y-3">
+              <div class="flex justify-between items-center border-b border-slate-700/80 pb-2">
+                <span class="text-sm font-black bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-md">第 ${idx + 1} 段移動</span>
+                <div class="flex items-center gap-2">
+                  ${feeBadge}
+                  <span class="text-sm font-bold text-slate-300">⏱️ ${timeFormatted}</span>
                 </div>
               </div>
-            ` : ''}
 
-            ${info.Remarks || info.Notes ? `
-              <p class="text-sm text-slate-200 bg-slate-900/60 p-2.5 rounded-lg border border-slate-800 font-medium leading-relaxed">💬 備註：${info.Remarks || info.Notes}</p>
-            ` : ''}
-
-            ${liveUrl ? `
-              <div class="pt-1">
-                <a href="${liveUrl}" target="_blank" class="inline-flex items-center gap-1 text-sm text-sky-400 hover:text-sky-300 font-bold underline">
-                  🔗 查看實時交通位置
-                </a>
+              <div class="text-lg font-black text-white mt-1">
+                ${seg.from} <span class="text-amber-400">➔</span> ${seg.to}
               </div>
-            ` : ''}
+
+              ${info.Platform || info.DeparturePlatform ? `
+                <div class="text-sm text-amber-200 bg-amber-950/40 border border-amber-800/60 p-2.5 rounded-lg font-bold">
+                  🏣 乘車處/月台：${info.Platform || info.DeparturePlatform}
+                </div>
+              ` : ''}
+
+              ${info.Line || info.RouteName ? `
+                <div class="text-sm text-slate-200 font-bold">
+                  🚇 搭乘路線：<span class="text-white">${info.Line || info.RouteName}</span>
+                </div>
+              ` : ''}
+
+              ${routeTips ? `
+                <div class="bg-slate-900/90 p-3.5 rounded-xl border border-slate-700/80">
+                  <p class="text-sm font-black text-amber-400 mb-1 flex items-center gap-1">🚶 步行/防迷路文字指引</p>
+                  <p class="text-sm text-slate-100 leading-relaxed font-medium whitespace-pre-line">${routeTips}</p>
+                </div>
+              ` : ''}
+
+              ${videoUrl ? `
+                <div class="pt-1">
+                  <a href="${videoUrl}" target="_blank" class="w-full py-2.5 bg-sky-950/80 hover:bg-sky-900 border border-sky-700 text-sky-200 text-sm font-black rounded-xl flex items-center justify-center gap-1.5 transition">
+                    <span>▶️</span> 觀看實景走法影片 (YouTube)
+                  </a>
+                </div>
+              ` : ''}
+
+              ${timetables.length > 0 ? `
+                <div class="pt-1">
+                  <p class="text-sm font-bold text-slate-300 mb-1.5">⏰ 建議班次時刻表：</p>
+                  <div class="flex flex-wrap gap-2">
+                    ${timetables.map(t => `<span class="bg-slate-900 border border-slate-700 text-amber-300 text-sm font-black px-2.5 py-1 rounded-md">${t.trim()}</span>`).join('')}
+                  </div>
+                </div>
+              ` : ''}
+
+              ${info.Remarks || info.Notes ? `
+                <p class="text-sm text-slate-200 bg-slate-900/60 p-2.5 rounded-lg border border-slate-800 font-medium leading-relaxed">💬 備註：${info.Remarks || info.Notes}</p>
+              ` : ''}
+
+              ${liveUrl ? `
+                <div class="pt-1">
+                  <a href="${liveUrl}" target="_blank" class="inline-flex items-center gap-1 text-sm text-sky-400 hover:text-sky-300 font-bold underline">
+                    🔗 查看實時交通位置 / 相關連結
+                  </a>
+                </div>
+              ` : ''}
+            </div>
+
+            <!-- 每段分開專屬的導航按鈕 (依照「改進想法」) -->
+            <a href="${segNavUrl}" target="_blank" class="w-full h-12 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-base rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition shadow-lg my-2">
+              <span>🗺️</span>
+              <span>開啟 Google 路線導航</span>
+            </a>
           </div>
         `;
       }).join('');
@@ -1028,17 +1056,10 @@
       document.getElementById('modal-grid').innerHTML = '';
       document.getElementById('modal-alerts').innerHTML = '';
 
-      // 需求 4.2：交通導航 URL 在 "Transport" 中優先選擇 "Shortcut"，次之才是原方法
-      const routeInfo = findTransportInfo(fullRoute, routeParts);
-      const defaultNavUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(routeParts[0])}&destination=${encodeURIComponent(routeParts[routeParts.length - 1])}`;
-      const mainNavUrl = routeInfo.Shortcut || routeInfo.ShortcutURL || routeInfo.Gmap_URL || defaultNavUrl;
-
-      document.getElementById('modal-actions').innerHTML = `
-        <a href="${mainNavUrl}" target="_blank" class="w-full h-12 bg-amber-400 text-slate-950 font-black text-base rounded-xl flex items-center justify-center gap-2 active:scale-95 transition shadow-lg">
-          <span>🗺️</span>
-          <span>開啟 Google 路線導航</span>
-        </a>
-      `;
+      // 交通彈窗已有分段按鈕，隱藏底部 fixed 動作列
+      const actionsEl = document.getElementById('modal-actions');
+      actionsEl.innerHTML = '';
+      actionsEl.classList.add('hidden');
 
       showModal();
     }
