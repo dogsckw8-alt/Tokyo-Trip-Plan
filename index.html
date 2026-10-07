@@ -958,7 +958,7 @@
       stepsContainer.innerHTML = segments.map((seg, idx) => {
         const info = seg.info || {};
         const timeFormatted = formatMins(info.Time || info.Duration);
-        const timetables = (info.Timetable || info['時刻表'] || '').split(/[,/]/).filter(Boolean);
+        const timetables = (info.Timetable || info['特定班次'] || '').split(/[,/]/).filter(Boolean);
         const liveUrl = info.LiveUrl || info.Link2 || info['實時位置連結'] || info.Options;
         const routeTips = info.RouteTips || info.RouteGuide || info.WalkingTips || info['路線提示'];
         const videoUrl = info.VideoURL || info.Video;
@@ -1024,7 +1024,7 @@
 
               ${timetables.length > 0 ? `
                 <div class="pt-1">
-                  <p class="text-sm font-bold text-slate-300 mb-1.5">⏰ 建議班次時刻表：</p>
+                  <p class="text-sm font-bold text-slate-300 mb-1.5">⏰ 建議特定班次：</p>
                   <div class="flex flex-wrap gap-2">
                     ${timetables.map(t => `<span class="bg-slate-900 border border-slate-700 text-amber-300 text-sm font-black px-2.5 py-1 rounded-md">${t.trim()}</span>`).join('')}
                   </div>
