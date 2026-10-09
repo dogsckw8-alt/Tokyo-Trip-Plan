@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>東京 7 日 6 夜旅行</title>
+  <title>東京 7 日 6 夜旅行 v3.0</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
@@ -12,6 +12,13 @@
     }
     .touch-card:active {
       transform: scale(0.98);
+    }
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
     }
   </style>
 </head>
@@ -37,7 +44,7 @@
     </div>
   </nav>
 
-  <!-- 主內容區：貫穿式時間軸 -->
+  <!-- 第一層：貫穿式時間軸與極簡卡片 -->
   <main class="max-w-md mx-auto px-4 pt-6 relative">
     <div class="absolute left-[39px] top-6 bottom-6 w-1 bg-slate-800 z-0"></div>
     <div id="timeline-container" class="space-y-6 relative z-10">
@@ -45,37 +52,52 @@
     </div>
   </main>
 
-  <!-- 二級彈窗：Bottom Sheet Modal -->
-  <div id="modal-overlay" class="fixed inset-0 bg-black/80 z-50 flex flex-col justify-end hidden opacity-0 transition-opacity duration-200" onclick="closeModal(event)">
-    <div id="modal-sheet" class="bg-slate-900 border-t border-slate-700 rounded-t-3xl p-5 max-h-[90vh] overflow-y-auto space-y-5 transform translate-y-full transition-transform duration-300 shadow-2xl" onclick="event.stopPropagation()">
+  <!-- 第二層： Bottom Sheet Modal (時刻表/影片/導航鏈/SubSpots 微型時間軸) -->
+  <div id="modal-overlay" class="fixed inset-0 bg-black/80 z-40 flex flex-col justify-end hidden opacity-0 transition-opacity duration-200" onclick="closeModal(event)">
+    <div id="modal-sheet" class="bg-slate-900 border-t border-slate-700 rounded-t-3xl max-h-[90vh] flex flex-col overflow-hidden transform translate-y-full transition-transform duration-300 shadow-2xl" onclick="event.stopPropagation()">
 
-      <div class="flex justify-between items-center border-b border-slate-800 pb-2">
-        <div class="w-12 h-1.5 bg-slate-700 rounded-full mx-auto"></div>
-        <button onclick="closeModalDirect()" class="text-slate-400 hover:text-white p-1 text-2xl font-bold">✕</button>
+      <!-- 可滾動內容主體 -->
+      <div class="p-5 space-y-5 overflow-y-auto flex-1">
+        <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+          <div id="modal-back-btn-container"></div>
+          <div class="w-12 h-1.5 bg-slate-700 rounded-full mx-auto"></div>
+          <button onclick="closeModalDirect()" class="text-slate-400 hover:text-white p-1 text-2xl font-bold">✕</button>
+        </div>
+
+        <!-- Header & Image Banner -->
+        <div id="modal-header" class="space-y-2"></div>
+
+        <!-- 核心網格資訊 -->
+        <div id="modal-grid" class="grid grid-cols-2 gap-3 text-slate-200"></div>
+
+        <!-- 轉乘/行程分段明細（交通專用微型時間軸） -->
+        <div id="modal-transit-steps" class="space-y-4 hidden"></div>
+
+        <!-- 高亮提醒、故事、SubSpots 散步路線微型時間軸、順遊下一站區域 -->
+        <div id="modal-alerts" class="space-y-3"></div>
       </div>
 
-      <!-- Header & Image Banner -->
-      <div id="modal-header" class="space-y-2"></div>
-
-      <!-- 核心網格 -->
-      <div id="modal-grid" class="grid grid-cols-2 gap-3 text-slate-200"></div>
-
-      <!-- 轉乘/行程分段明細（交通專用） -->
-      <div id="modal-transit-steps" class="space-y-3 hidden"></div>
-
-      <!-- 高亮提醒、故事、SubSpots、順遊下一站區域 -->
-      <div id="modal-alerts" class="space-y-3"></div>
-
       <!-- 吸底動作按鈕列 -->
-      <div id="modal-actions" class="sticky bottom-0 bg-slate-900 pt-3 pb-2 flex gap-3 z-10 border-t border-slate-800"></div>
+      <div id="modal-actions" class="p-4 bg-slate-900 border-t border-slate-800 flex gap-3 z-10 flex-shrink-0"></div>
+    </div>
+  </div>
+
+  <!-- 第三層：Lightbox 全螢幕圖片預覽 Modal -->
+  <div id="lightbox-overlay" class="fixed inset-0 bg-black/95 z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-200 p-4" onclick="closeLightbox()">
+    <button onclick="closeLightbox()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-3xl font-bold z-50 p-2 bg-slate-900/80 rounded-full w-12 h-12 flex items-center justify-center border border-slate-700">✕</button>
+    <div class="relative max-w-full max-h-full flex items-center justify-center" onclick="event.stopPropagation()">
+      <img id="lightbox-img" src="" alt="圖片預覽" class="max-w-full max-h-[85vh] rounded-2xl object-contain shadow-2xl transform scale-95 transition-transform duration-200 border border-slate-800">
+      <div id="lightbox-caption" class="absolute bottom-[-2.5rem] text-center text-sm font-bold text-slate-300 bg-slate-900/90 px-4 py-1.5 rounded-full border border-slate-700"></div>
     </div>
   </div>
 
   <script>
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyPhyYaZhVCE3LyP7wfK_O3t3pACmjKHo53kET2F2K6YMf6DgyNWxcMxHGFVyIGkp7Nug/exec";
+    const GAS_API_URL = "myapi";
 
     let currentData = null;
     let selectedDayIndex = 0;
+    let modalHistory = [];
+    let currentModalItem = null;
 
     const WEEK_DAYS = ['(日)', '(一)', '(二)', '(三)', '(四)', '(五)', '(六)'];
     const WEEK_KEYS = ['日', '一', '二', '三', '四', '五', '六'];
@@ -89,10 +111,8 @@
       try {
         const res = await fetch(GAS_API_URL);
         const json = await res.json();
-        console.log("1. API 原始回傳資料:", json);
         if (json.status === 'success') {
           currentData = json;
-          console.log("2. 寫入後的 currentData:", currentData);
           dotEl.className = "w-3 h-3 rounded-full bg-emerald-400";
           textEl.textContent = "已同步";
           renderApp();
@@ -113,7 +133,6 @@
       }
 
       const days = currentData.schedule.days;
-
       const tabsNav = document.getElementById('day-tabs');
       tabsNav.innerHTML = days.map((dayStr, idx) => {
         const dateObj = new Date(dayStr);
@@ -141,58 +160,21 @@
       renderApp();
     }
 
-    // 停留時間與離開時間計算函數
+    function getCleanSpotName(rawName) {
+      if (!rawName) return '';
+      return rawName.split('|')[0].trim();
+    }
+
     function parseDurationMins(durationVal) {
       if (!durationVal) return 60;
       const str = String(durationVal).trim();
       if (!str) return 60;
-      
       if (str.includes('h') || str.includes('時')) {
         const num = parseFloat(str);
         return isNaN(num) ? 60 : Math.round(num * 60);
       }
       const match = str.match(/\d+/);
       return match ? parseInt(match[0], 10) : 60;
-    }
-
-    
-
-
-// 尋找景點 A ➔ 景點 B 在 transports 資料庫中的移動紀錄
-function getBetweenSpotsTransport(fromSpot, toSpot) {
-  if (!currentData || !currentData.transports || !fromSpot || !toSpot) return null;
-  
-  const cleanFrom = getCleanSpotName(fromSpot);
-  const cleanTo = getCleanSpotName(toSpot);
-  const tMap = currentData.transports;
-
-  // 1. 先用 key 嘗試比對 ("A➔B" 或 "A→B")
-  if (tMap[`${cleanFrom}➔${cleanTo}`]) return tMap[`${cleanFrom}➔${cleanTo}`];
-  if (tMap[`${cleanFrom}→${cleanTo}`]) return tMap[`${cleanFrom}→${cleanTo}`];
-
-  // 2. 遍歷所有紀錄，比對 From 與 To 欄位
-  for (const key in tMap) {
-    const item = tMap[key];
-    if (item && item.From && item.To) {
-      if (item.From.trim() === cleanFrom && item.To.trim() === cleanTo) {
-        return item;
-      }
-    }
-  }
-  return null;
-}
-
-    function calcDepartureTime(startTimeStr, durationMins) {
-      if (!startTimeStr || !startTimeStr.includes(':')) return null;
-      const [h, m] = startTimeStr.split(':').map(Number);
-      if (isNaN(h) || isNaN(m)) return null;
-      
-      const totalMins = h * 60 + m + durationMins;
-      const endH = Math.floor(totalMins / 60) % 24;
-      const endM = totalMins % 60;
-      
-      const pad = n => String(n).padStart(2, '0');
-      return `${pad(endH)}:${pad(endM)}`;
     }
 
     function formatMins(rawVal) {
@@ -207,11 +189,11 @@ function getBetweenSpotsTransport(fromSpot, toSpot) {
       if (!rawFee && rawFee !== 0) return '';
       const str = String(rawFee).trim();
       if (str === '0' || str.toLowerCase().includes('pass') || str.includes('免')) {
-        return '<span class="bg-emerald-950/80 border border-emerald-800 text-emerald-300 px-2.5 py-1 rounded-lg">🎫 Pass涵蓋 (¥0)</span>';
+        return '<span class="bg-emerald-950/80 border border-emerald-800 text-emerald-300 px-2 py-0.5 rounded-md text-xs font-bold">🎫 Pass涵蓋 (¥0)</span>';
       }
       const numMatch = str.match(/\d+/);
       const val = numMatch ? numMatch[0] : str;
-      return `<span class="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2.5 py-1 rounded-lg">💰 交通票/IC卡 ¥${val}</span>`;
+      return `<span class="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-md text-xs font-bold">💰 ¥${val}</span>`;
     }
 
     function formatHoursDisplay(hoursStr) {
@@ -221,703 +203,291 @@ function getBetweenSpotsTransport(fromSpot, toSpot) {
       return str.replace(/(\d{1,2}:\d{2}\s*[-~～]\s*\d{1,2}:\d{2})[\s,;/]+(\d{1,2}:\d{2}\s*[-~～]\s*\d{1,2}:\d{2})/g, '$1\n$2');
     }
 
+    /* ----------------------------------------------------
+       增強型 SubSpots 解析器 (時間戳記 + 特色標籤)
+    ---------------------------------------------------- */
     function parseSubSpots(subSpotsStr) {
       if (!subSpotsStr) return [];
-      return String(subSpotsStr)
-        .split(/[,，、\n]/)
-        .map(s => s.trim())
-        .filter(Boolean);
+      const rawList = String(subSpotsStr).split(/\||\n/).map(s => s.trim()).filter(Boolean);
+
+      return rawList.map(itemStr => {
+        let time = '';
+        let name = itemStr;
+        let badges = [];
+
+        // 1. 提昇時間戳記 (例如: 17:15 銀座中央通...)
+        const timeMatch = name.match(/^(\d{1,2}:\d{2}(?:\s*[-~～]\s*\d{1,2}:\d{2})?)\s+/);
+        if (timeMatch) {
+          time = timeMatch[1];
+          name = name.replace(timeMatch[0], '').trim();
+        }
+
+        // 2. 提昇特色標籤 (例如: 新丸大樓7F[觀景台/免費])
+        const badgeMatch = name.match(/\[(.*?)\]/);
+        if (badgeMatch) {
+          badges = badgeMatch[1].split(/[,，/]/).map(b => b.trim()).filter(Boolean);
+          name = name.replace(/\[.*?\]/, '').trim();
+        }
+
+        return { time, name, badges, raw: itemStr };
+      });
     }
 
-    function calcMultiLegTime(routeParts) {
-      let total = 0;
-      let legTimes = [];
-      let hasValid = false;
+    /* LocalStorage 踏實通關狀態管理 */
+    function getSubspotCheckKey(parentSpot, subspotName) {
+      return `subspot_check_${parentSpot}_${subspotName}`;
+    }
 
-      for (let i = 0; i < routeParts.length - 1; i++) {
-        const from = routeParts[i];
-        const to = routeParts[i + 1];
-        const info = findTransportInfo(`${from}➔${to}`, [from, to]);
-        const num = parseInt(info.Time || info.Duration || 0, 10);
-        if (!isNaN(num) && num > 0) {
-          total += num;
-          legTimes.push(num);
-          hasValid = true;
+    function toggleSubspotCheck(parentSpot, subspotName, checkboxEl) {
+      const isChecked = checkboxEl.checked;
+      const key = getSubspotCheckKey(parentSpot, subspotName);
+      localStorage.setItem(key, isChecked ? 'true' : 'false');
+
+      const labelEl = document.getElementById(`subspot-label-${parentSpot}-${subspotName}`);
+      if (labelEl) {
+        if (isChecked) {
+          labelEl.classList.add('line-through', 'text-slate-500');
+          labelEl.classList.remove('text-slate-100');
+        } else {
+          labelEl.classList.remove('line-through', 'text-slate-500');
+          labelEl.classList.add('text-slate-100');
         }
       }
+    }
 
-      if (hasValid && routeParts.length > 2) {
-        return `${total} mins (${legTimes.join('+')})`;
-      } else if (hasValid) {
-        return `${total} mins`;
+    /* 自動合成 Google Walking Route 多站點導航網址 */
+    function buildContinuousMapUrl(parentSpot, subSpots) {
+      if (!subSpots || subSpots.length === 0) {
+        return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(parentSpot)}`;
       }
-      return null;
-    }
-
-    function calcMultiLegFee(routeParts) {
-      let totalFee = 0;
-      let hasValidFee = false;
-
-      for (let i = 0; i < routeParts.length - 1; i++) {
-        const from = routeParts[i];
-        const to = routeParts[i + 1];
-        const info = findTransportInfo(`${from}➔${to}`, [from, to]);
-        
-        if (info && info.Fee !== undefined && info.Fee !== null && String(info.Fee).trim() !== '') {
-          const feeStr = String(info.Fee).trim();
-          const numMatch = feeStr.match(/\d+/);
-          if (numMatch) {
-            totalFee += parseInt(numMatch[0], 10);
-            hasValidFee = true;
-          }
-        }
+      const names = subSpots.map(s => s.name);
+      if (names.length === 1) {
+        return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(names[0])}`;
       }
-
-      return hasValidFee ? totalFee : null;
-    }
-
-    
-// 1. 時間格式轉換工具 (轉換為當天總分鐘數)
-function timeToMins(timeStr) {
-  if (!timeStr || typeof timeStr !== 'string') return null;
-  const match = timeStr.match(/(\d{1,2}):(\d{2})/);
-  if (!match) return null;
-  return parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
-}
-
-// 2. 強化版多段式與關鍵字解析函數
-function parseCellContent(rawString) {
-  if (!rawString) return { spotName: '', subTitle: '', notice: '', openTime: null, queueTime: null, leaveTime: null };
-
-  const parts = rawString.split('|').map(s => s.trim());
-  const spotName = parts[0] || '';
-  const subTitle = parts[1] || '';
-  const notice = parts.slice(2).join(' ') || '';
-
-  // 解析「營業/開店」時間 (例: 17:30營業)
-  const openMatch = notice.match(/(\d{1,2}:\d{2})\s*(?:營業|開店|開門)/);
-  // 解析「排隊/抵達/建議」時間 (例: 17:15排隊, 建議10:45抵達)
-  const queueMatch = notice.match(/(\d{1,2}:\d{2})\s*(?:排隊|抵達|集合)?/);
-  const hasQueueKeyword = /排隊|抵達|集合|建議/.test(notice);
-  // 解析「離開」時間 (例: 13:30離開, 13:30前離開)
-  const leaveMatch = notice.match(/(\d{1,2}:\d{2})\s*(?:前)?(?:必須)?離開/);
-
-  const openTime = openMatch ? openMatch[1] : null;
-  const leaveTime = leaveMatch ? leaveMatch[1] : null;
-
-  let queueTime = null;
-  // 只有在有排隊相關關鍵字，且該時間不等於營業/離開時間時採納
-  if (hasQueueKeyword && queueMatch) {
-    if (queueMatch[1] !== openTime && queueMatch[1] !== leaveTime) {
-      queueTime = queueMatch[1];
-    }
-  }
-  // 特殊情況：無「營業」關鍵字但寫了排隊 (例: 10:45排隊)
-  if (!openTime && !leaveTime && queueMatch && (hasQueueKeyword || notice.includes('排隊'))) {
-    queueTime = queueMatch[1];
-  }
-
-  return { spotName, subTitle, notice, openTime, queueTime, leaveTime };
-}
-
-// 3. 計算卡片時間與狀態徽章
-function getCardStatusBadge({ slotTime, dbItem, parsedNotice, weekKey }) {
-  const { notice, openTime, queueTime, leaveTime } = parsedNotice;
-  const slotMins = timeToMins(slotTime);
-
-  // 取得資料庫中的營業時間資訊
-  const dbHoursStr = dbItem ? (dbItem[weekKey] || dbItem.Hours || dbItem.OpenTime || '') : '';
-  const dbTimeMatch = dbHoursStr.match(/(\d{1,2}:\d{2})/);
-
-  // 優先採用表格內明確寫的營業時間，若無則採用資料庫時間
-  const finalOpenTime = openTime || (dbTimeMatch ? dbTimeMatch[1] : null);
-
-  // 情況 A：含有「離開時間」提醒 (例: 13:30離開)
-  if (leaveTime) {
-    return `
-      <span class="bg-rose-950/80 text-rose-300 border border-rose-800/60 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
-        ⚠️ ${leaveTime} 前須離開
-      </span>
-    `;
-  }
-
-  // 情況 B：含有「排隊 / 建議抵達時間」 (例: 17:30營業,17:15排隊 或 10:45排隊)
-  if (queueTime) {
-    return `
-      <span class="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
-        🔥 ${finalOpenTime ? finalOpenTime + '開店 ' : ''}(建議 ${queueTime} 排隊)
-      </span>
-    `;
-  }
-
-  // 情況 C：單純營業時間提醒與網格時段比對
-  const dbOpenMins = timeToMins(finalOpenTime);
-  if (slotMins !== null && dbOpenMins !== null) {
-    const diffMins = dbOpenMins - slotMins;
-
-    if (diffMins >= 0 && diffMins <= 30) {
-      return `
-        <span class="bg-blue-950/80 text-blue-300 border border-blue-800/60 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
-          ℹ️ ${finalOpenTime} 開店
-        </span>
-      `;
-    }
-
-    if (diffMins > 30) {
-      return `
-        <span class="bg-rose-950/80 text-rose-300 border border-rose-800/60 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
-          ⚠️ ${finalOpenTime} 才開店
-        </span>
-      `;
-    }
-  }
-
-  // 情況 D：無時間關鍵字的純文字注意事項
-  if (notice) {
-    return `
-      <span class="bg-slate-800 text-amber-300 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
-        💡 ${notice}
-      </span>
-    `;
-  }
-
-  return '';
-}
-// 4. 順遊下一站模組 (已修正三段式字串純店名比對)
-function renderNextStepModule(itemName, currentDayKey) {
-  const timeline = currentData.schedule.timeline;
-  const dayItems = timeline.filter(slot => slot.items[currentDayKey]);
-  
-  const cleanTargetName = getCleanSpotName(itemName);
-  const currentIdx = dayItems.findIndex(slot => getCleanSpotName(slot.items[currentDayKey]) === cleanTargetName);
-
-  if (currentIdx === -1 || currentIdx >= dayItems.length - 1) {
-    return `
-      <div class="bg-slate-800/40 p-3 rounded-xl border border-slate-800 text-center text-xs text-slate-400 font-bold">
-        🏁 此站為本日行程最終站
-      </div>
-    `;
-  }
-
-  const nextSlot = dayItems[currentIdx + 1];
-  const nextRawName = nextSlot.items[currentDayKey];
-  const isNextTransport = nextRawName.includes('→') || nextRawName.includes('➔');
-
-  if (isNextTransport) {
-    const cleanRoute = getCleanSpotName(nextRawName);
-    return `
-      <div class="bg-amber-950/30 border border-amber-800/60 p-3.5 rounded-2xl space-y-2">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-black text-amber-400 uppercase tracking-wider">⏭️ 順遊下一站（交通接駁）</span>
-          <span class="text-xs font-bold text-slate-400">⏰ ${nextSlot.time} 出發</span>
-        </div>
-        <div class="flex items-center justify-between gap-2 pt-1">
-          <div class="font-black text-white text-sm">🚌 ${cleanRoute}</div>
-          <button onclick="openTransportModal('${cleanRoute}')" class="bg-amber-400 text-slate-950 text-xs font-black px-3 py-1.5 rounded-xl shadow active:scale-95 transition">
-            查看路線 ➔
-          </button>
-        </div>
-      </div>
-    `;
-  } else {
-    const nextCleanName = getCleanSpotName(nextRawName);
-    const nextDbItem = (currentData.restaurants && currentData.restaurants[nextCleanName]) || 
-                       (currentData.attractions && currentData.attractions[nextCleanName]) || {};
-    const icon = getItemIcon(nextDbItem.Type || nextDbItem['Rest.Type'], nextCleanName);
-
-    return `
-      <div class="bg-slate-800/90 border border-slate-700 p-3.5 rounded-2xl space-y-2">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-black text-amber-400 uppercase tracking-wider">⏭️ 順遊下一站</span>
-          <span class="text-xs font-bold text-slate-400">⏰ ${nextSlot.time} 到達</span>
-        </div>
-        <div class="flex items-center justify-between gap-2 pt-1">
-          <div class="flex items-center gap-2">
-            <span class="text-xl">${icon}</span>
-            <div>
-              <div class="font-black text-white text-sm leading-snug">${nextCleanName}</div>
-              ${nextDbItem.District ? `<span class="text-[11px] font-bold text-slate-400">📍 ${nextDbItem.District}</span>` : ''}
-            </div>
-          </div>
-          <button onclick="openDetailModal('${nextCleanName}', '${nextSlot.time}')" class="bg-slate-700 hover:bg-slate-600 text-amber-300 border border-amber-500/30 text-xs font-black px-3 py-1.5 rounded-xl active:scale-95 transition">
-            開啟卡片 ➔
-          </button>
-        </div>
-      </div>
-    `;
-  }
-}
-
-// 5. 時間軸主要渲染函數
-function renderTimeline(currentDayKey) {
-  console.log('正在渲染 Day:', currentDayKey);
-  const container = document.getElementById('timeline-container');
-  const timeline = currentData.schedule.timeline;
-  const dayItems = timeline.filter(slot => slot.items[currentDayKey]);
-
-  if (dayItems.length === 0) {
-    container.innerHTML = '<div class="text-center text-slate-400 py-12 text-lg">☕ 本日尚無排定行程</div>';
-    return;
-  }
-
-  // 取得當前星期的 key (如 "日", "一") 供營業時間比對使用
-  const dateObj = new Date(currentDayKey);
-  const WEEK_KEYS = ['日', '一', '二', '三', '四', '五', '六'];
-  const weekKey = WEEK_KEYS[dateObj.getDay()] || '';
-
-  container.innerHTML = dayItems.map((slot, idx) => {
-    const rawName = slot.items[currentDayKey];
-    const isTransport = rawName.includes('→') || rawName.includes('➔');
-
-    // 分支 1：獨立交通格
-    if (isTransport) {
-      const cleanRoute = getCleanSpotName(rawName);
-      const routeParts = cleanRoute.split(/→|➔/).map(p => p.trim());
-      const isMultiLeg = routeParts.length > 2;
-
-      const transInfo = findTransportInfo(cleanRoute, routeParts);
-
-      let durationStr = isMultiLeg ? calcMultiLegTime(routeParts) : null;
-      if (!durationStr) {
-        durationStr = formatMins(transInfo.Time || transInfo.Duration);
+      const origin = encodeURIComponent(names[0]);
+      const destination = encodeURIComponent(names[names.length - 1]);
+      const waypoints = names.slice(1, -1).map(n => encodeURIComponent(n)).join('%7C');
+      let url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=walking`;
+      if (waypoints) {
+        url += `&waypoints=${waypoints}`;
       }
-
-      let feeVal = transInfo.Fee;
-      if (isMultiLeg) {
-        const multiFee = calcMultiLegFee(routeParts);
-        if (multiFee !== null) feeVal = multiFee;
-      }
-
-      const feeBadge = formatFeeDisplay(feeVal);
-
-      return `
-        <div class="flex items-start gap-3 relative z-10">
-          <div class="w-12 pt-2 flex-shrink-0 text-right">
-            <span class="text-xs font-black text-amber-400 bg-slate-900 px-1 py-0.5 rounded border border-amber-500/30">${slot.time}</span>
-          </div>
-          
-          <div onclick="openTransportModal('${cleanRoute}')" class="touch-card flex-1 bg-slate-900/90 border border-amber-500/40 hover:border-amber-400 p-3.5 rounded-2xl shadow-md cursor-pointer transition active:scale-[0.98]">
-            <div class="flex items-center justify-between gap-2">
-              <div class="flex items-center gap-2">
-                <span class="text-xl">🚌</span>
-                <div>
-                  <h3 class="text-base font-black text-amber-300 leading-snug">
-                    ${routeParts.join(' ➔ ')}
-                  </h3>
-                  ${isMultiLeg ? `<span class="inline-block bg-indigo-950 text-indigo-300 text-[10px] font-bold px-2 py-0.5 rounded mt-1 border border-indigo-800">轉乘路線</span>` : ''}
-                </div>
-              </div>
-            </div>
-
-            <div class="flex flex-wrap items-center gap-2 mt-2 pt-2 border-t border-slate-800 text-xs font-bold text-slate-300">
-              <span class="bg-amber-500/20 text-amber-300 px-2.5 py-1 rounded-lg">⏱️ ${durationStr}</span>
-              ${feeBadge}
-              ${transInfo.Line ? `<span class="bg-slate-800 text-slate-300 px-2.5 py-1 rounded-lg">🚇 ${transInfo.Line}</span>` : ''}
-            </div>
-          </div>
-        </div>
-      `;
+      return url;
     }
 
-    // 分支 2：景點 / 餐廳 / 飯店
-    const { spotName, subTitle, notice, customTime, isOpenTimeNotice } = parseCellContent(rawName);
-
-    const dbItem = (currentData.restaurants && currentData.restaurants[spotName]) || 
-                   (currentData.attractions && currentData.attractions[spotName]) || {};
-
-// 1. 確保前面有呼叫解析函數取得 parsedNotice（檔名變數依你原本的程式碼為主，如 rawString 或 cellText）
-const parsedNotice = parseCellContent(rawString);
-
-// 2. 左側時間標籤覆蓋邏輯：若有指定「排隊/建議抵達時間」，優先顯示排隊時間，否則顯示原本格子的時間
-const displayTime = parsedNotice.queueTime || slot.time;
-
-// 3. 傳入 parsedNotice 產生狀態徽章
-const statusBadge = getCardStatusBadge({
-  slotTime: slot.time,
-  dbItem,
-  parsedNotice,
-  weekKey
-});
-    const nextSlot = dayItems[idx + 1];
-    const nextRawName = nextSlot ? nextSlot.items[currentDayKey] : null;
-    const nextIsTransport = nextRawName ? (nextRawName.includes('→') || nextRawName.includes('➔')) : false;
-    const isShortWalkToNext = nextSlot && !nextIsTransport;
-
-    let shortWalkHTML = '';
-    if (isShortWalkToNext) {
-      const nextClean = getCleanSpotName(nextRawName);
-      const matchedTrans = getBetweenSpotsTransport(spotName, nextClean);
-
-      if (matchedTrans) {
-        const durationStr = formatMins(matchedTrans.Time || matchedTrans.Duration);
-        const feeBadge = matchedTrans.Fee ? formatFeeDisplay(matchedTrans.Fee) : '';
-        const lineInfo = matchedTrans.Line ? ` (${matchedTrans.Line})` : '';
-
-        shortWalkHTML = `
-          <div onclick="openTransportModal('${spotName}➔${nextClean}')" class="flex items-center justify-between bg-slate-900/60 border border-slate-800 hover:border-amber-500/40 px-3 py-2 rounded-xl cursor-pointer text-xs transition my-1">
-            <div class="flex items-center gap-2 text-slate-300 font-bold">
-              <span class="text-amber-400">🚶</span>
-              <span>移動至 <strong class="text-amber-300">${nextClean}</strong>${lineInfo}</span>
-            </div>
-            <div class="flex items-center gap-2 font-bold">
-              <span class="bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded">⏱️ 約 ${durationStr}</span>
-              ${feeBadge}
-            </div>
-          </div>
-        `;
-      } else {
-        shortWalkHTML = `
-          <div class="flex items-center gap-2 pl-2 text-xs font-bold text-slate-400 py-1">
-            <span class="w-2 h-2 rounded-full bg-slate-600 animate-ping"></span>
-            <span>🚶 短程移動 / 徒步前往下一站（約 3 - 8 分鐘）</span>
-          </div>
-        `;
-      }
-    }
-
-    const icon = getItemIcon(dbItem.Type || dbItem['Rest.Type'], spotName);
-    const reservationBadge = getReservationBadge(dbItem.reservation || dbItem.BookingStatus);
-    const subSpotsList = parseSubSpots(dbItem.SubSpots);
-    const durationMins = parseDurationMins(dbItem.Duration);
-    const departureTime = calcDepartureTime(displayTime, durationMins);
-
-    return `
-      <div class="flex items-start gap-3 relative z-10">
-        <!-- 左側時間標籤 -->
-        <div class="w-12 pt-2 flex-shrink-0 text-right">
-          <span class="text-base font-extrabold ${(customTime && !isOpenTimeNotice) ? 'text-amber-300 underline underline-offset-2' : 'text-amber-400'} block">
-            ${displayTime}
-          </span>
-        </div>
-
-        <!-- 右側主要卡片 -->
-        <div class="flex-1 space-y-3">
-          <div onclick="openDetailModal('${spotName}', '${displayTime}')" class="touch-card bg-slate-900 border border-slate-800 hover:border-slate-700 p-4 rounded-2xl shadow-lg cursor-pointer transition duration-150 active:scale-[0.98]">
-            <div class="flex items-start justify-between gap-2">
-              <div>
-                <h2 class="text-xl font-black text-white leading-snug flex items-center gap-1.5">
-                  <span>${icon}</span>
-                  <span>${spotName}</span>
-                </h2>
-                ${subTitle ? `<p class="text-xs text-slate-400 mt-0.5 font-medium truncate max-w-[220px]">${subTitle}</p>` : ''}
-              </div>
-            </div>
-
-            <!-- 卡片底部標籤列 -->
-            <div class="flex flex-wrap items-center gap-2 mt-3 pt-2 border-t border-slate-800/80">
-              ${dbItem.District ? `<span class="bg-slate-800 text-slate-200 text-xs font-bold px-2.5 py-1 rounded-lg">📍 ${dbItem.District}</span>` : ''}
-              <span class="bg-indigo-950/80 text-indigo-300 border border-indigo-800/60 text-xs font-bold px-2.5 py-1 rounded-lg">
-                ⏱️ 預計停留 ${durationMins} 分${departureTime ? ` (${departureTime} 離開)` : ''}
-              </span>
-              ${statusBadge}
-              ${dbItem.AvgCost ? `<span class="bg-slate-800 text-amber-300 text-xs font-bold px-2.5 py-1 rounded-lg">💰 約 ¥${dbItem.AvgCost}</span>` : ''}
-              ${reservationBadge}
-              ${subSpotsList.length > 0 ? `<span class="bg-indigo-950/90 border border-indigo-700/60 text-indigo-300 text-xs font-bold px-2.5 py-1 rounded-lg">🍡 包含 ${subSpotsList.length} 個店家/景點</span>` : ''}
-            </div>
-          </div>
-
-          <!-- 自動移動資訊塊 -->
-          ${shortWalkHTML}
-        </div>
-      </div>
-    `;
-  }).join('');
-}
-    
-    function findTransportInfo(fullRoute, routeParts) {
-      if (!currentData.transports) return {};
-      const tMap = currentData.transports;
-
-      if (tMap[fullRoute]) return tMap[fullRoute];
-
-      const from = routeParts[0];
-      const to = routeParts[routeParts.length - 1];
-      if (tMap[`${from}➔${to}`]) return tMap[`${from}➔${to}`];
-      if (tMap[`${from}→${to}`]) return tMap[`${from}→${to}`];
-
-      return {};
-    }
-
-    function parseTitles(rawName, dbItem) {
-      let main = rawName;
-      let sub = dbItem.Name || '';
-
-      if (rawName.includes('(') || rawName.includes('（')) {
-        main = rawName;
-      } else if (dbItem.RestType || dbItem['Rest.Type']) {
-        const type = dbItem.RestType || dbItem['Rest.Type'];
-        if (type && !rawName.includes(type)) sub = `${type} · ${sub}`;
-      }
-
-      if (main === sub) sub = '';
-      return { mainTitle: main, subTitle: sub };
+    function parseCellContent(rawString) {
+      if (!rawString) return { spotName: '', subTitle: '', notice: '' };
+      const parts = rawString.split('|').map(s => s.trim());
+      return { spotName: parts[0] || '', subTitle: parts[1] || '', notice: parts.slice(2).join(' ') || '' };
     }
 
     function getItemIcon(type, name) {
       if (!type) {
         if (name.includes('機場')) return '✈️';
-        if (name.includes('酒店') || name.includes('飯店') || name.includes('HOTEL') || name.includes('Guesthouse')) return '🏨';
+        if (name.includes('點燈') || name.includes('聖誕') || name.includes('市集')) return '🎄';
+        if (name.includes('酒店') || name.includes('飯店')) return '🏨';
         return '📍';
       }
-      if (type.includes('Hotel') || type.includes('飯店') || type.includes('住宿')) return '🏨';
-      if (type.includes('餐廳') || type.includes('燒肉') || type.includes('壽司')) return '🍴';
-      if (type.includes('面包') || type.includes('甜點') || type.includes('咖啡')) return '☕';
-      if (type.includes('Spot') || type.includes('景點') || type.includes('神社') || type.includes('商店街')) return '⛩️';
-      if (type.includes('Mall') || type.includes('購物') || type.includes('outlet')) return '🛍️';
+      if (type.includes('點燈') || type.includes('聖誕')) return '✨';
+      if (type.includes('Hotel') || type.includes('飯店')) return '🏨';
+      if (type.includes('餐廳') || type.includes('燒肉')) return '🍴';
+      if (type.includes('Spot') || type.includes('景點')) return '⛩️';
       return '📍';
     }
 
-    function getReservationBadge(status) {
-      if (!status) return '';
-      if (status.includes('排隊') || status.includes('現場')) {
-        return `<span class="bg-rose-950/80 border border-rose-800 text-rose-300 text-xs font-bold px-2.5 py-1 rounded-lg">🔴 現場排隊</span>`;
-      }
-      if (status.includes('預約') || status.includes('不用排')) {
-        return `<span class="bg-emerald-950/80 border border-emerald-800 text-emerald-300 text-xs font-bold px-2.5 py-1 rounded-lg">🟢 已預約/不用排</span>`;
-      }
-      return `<span class="bg-amber-950/80 border border-amber-800 text-amber-300 text-xs font-bold px-2.5 py-1 rounded-lg">🟡 ${status}</span>`;
-    }
-
-    // 順遊下一站模組渲染器
-    function renderNextStepModule(itemName, currentDayKey) {
+    /* ----------------------------------------------------
+       第一層：極簡時間軸卡片 (Minimalist Timeline)
+    ---------------------------------------------------- */
+    function renderTimeline(currentDayKey) {
+      const container = document.getElementById('timeline-container');
       const timeline = currentData.schedule.timeline;
       const dayItems = timeline.filter(slot => slot.items[currentDayKey]);
-      const currentIdx = dayItems.findIndex(slot => slot.items[currentDayKey] === itemName);
 
-      if (currentIdx === -1 || currentIdx >= dayItems.length - 1) {
-        return `
-          <div class="bg-slate-800/40 p-3 rounded-xl border border-slate-800 text-center text-xs text-slate-400 font-bold">
-            🏁 此站為本日行程最終站
-          </div>
-        `;
+      if (dayItems.length === 0) {
+        container.innerHTML = '<div class="text-center text-slate-400 py-12 text-lg">☕ 本日尚無排定行程</div>';
+        return;
       }
 
-      const nextSlot = dayItems[currentIdx + 1];
-      const nextRawName = nextSlot.items[currentDayKey];
-      const isNextTransport = nextRawName.includes('→') || nextRawName.includes('➔');
+      container.innerHTML = dayItems.map((slot) => {
+        const rawName = slot.items[currentDayKey];
+        const isTransport = rawName.includes('→') || rawName.includes('➔');
 
-      if (isNextTransport) {
-        const cleanRoute = nextRawName.split('|')[0].trim();
-        return `
-          <div class="bg-amber-950/30 border border-amber-800/60 p-3.5 rounded-2xl space-y-2">
-            <div class="flex items-center justify-between">
-              <span class="text-xs font-black text-amber-400 uppercase tracking-wider">⏭️ 順遊下一站（交通接駁）</span>
-              <span class="text-xs font-bold text-slate-400">⏰ ${nextSlot.time} 出發</span>
-            </div>
-            <div class="flex items-center justify-between gap-2 pt-1">
-              <div class="font-black text-white text-sm">🚌 ${cleanRoute}</div>
-              <button onclick="openTransportModal('${cleanRoute}')" class="bg-amber-400 text-slate-950 text-xs font-black px-3 py-1.5 rounded-xl shadow active:scale-95 transition">
-                查看路線 ➔
-              </button>
-            </div>
-          </div>
-        `;
-      } else {
-        const nextDbItem = (currentData.restaurants && currentData.restaurants[nextRawName]) || 
-                           (currentData.attractions && currentData.attractions[nextRawName]) || {};
-        const icon = getItemIcon(nextDbItem.Type || nextDbItem['Rest.Type'], nextRawName);
+        if (isTransport) {
+          const cleanRoute = getCleanSpotName(rawName);
+          const routeParts = cleanRoute.split(/→|➔/).map(p => p.trim());
+          const transInfo = (currentData.transports && currentData.transports[cleanRoute]) || {};
+          const durationStr = formatMins(transInfo.Time || transInfo.Duration);
+          const feeBadge = formatFeeDisplay(transInfo.Fee);
 
-        return `
-          <div class="bg-slate-800/90 border border-slate-700 p-3.5 rounded-2xl space-y-2">
-            <div class="flex items-center justify-between">
-              <span class="text-xs font-black text-amber-400 uppercase tracking-wider">⏭️ 順遊下一站</span>
-              <span class="text-xs font-bold text-slate-400">⏰ ${nextSlot.time} 到達</span>
-            </div>
-            <div class="flex items-center justify-between gap-2 pt-1">
-              <div class="flex items-center gap-2">
-                <span class="text-xl">${icon}</span>
-                <div>
-                  <div class="font-black text-white text-sm leading-snug">${nextRawName}</div>
-                  ${nextDbItem.District ? `<span class="text-[11px] font-bold text-slate-400">📍 ${nextDbItem.District}</span>` : ''}
+          return `
+            <div class="flex items-start gap-3 relative z-10">
+              <div class="w-12 pt-2 flex-shrink-0 text-right">
+                <span class="text-xs font-black text-amber-400 bg-slate-900 px-1 py-0.5 rounded border border-amber-500/30">${slot.time}</span>
+              </div>
+              <div onclick="openTransportModal('${cleanRoute}')" class="touch-card flex-1 bg-slate-900/90 border border-amber-500/40 p-3 rounded-2xl cursor-pointer transition active:scale-[0.98]">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <span class="text-lg">🚌</span>
+                    <h3 class="text-sm font-black text-amber-300">${routeParts.join(' ➔ ')}</h3>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2 mt-1.5 text-xs font-bold text-slate-300">
+                  <span class="bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-md">⏱️ ${durationStr}</span>
+                  ${feeBadge}
                 </div>
               </div>
-              <button onclick="openDetailModal('${nextRawName}', '${nextSlot.time}')" class="bg-slate-700 hover:bg-slate-600 text-amber-300 border border-amber-500/30 text-xs font-black px-3 py-1.5 rounded-xl active:scale-95 transition">
-                開啟卡片 ➔
-              </button>
+            </div>
+          `;
+        }
+
+        const parsedNotice = parseCellContent(rawName);
+        const { spotName, subTitle } = parsedNotice;
+        const dbItem = (currentData.restaurants && currentData.restaurants[spotName]) || 
+                       (currentData.attractions && currentData.attractions[spotName]) || {};
+
+        const icon = getItemIcon(dbItem.Type || dbItem['Rest.Type'], spotName);
+        const subSpotsList = parseSubSpots(dbItem.SubSpots);
+        const durationMins = parseDurationMins(dbItem.Duration);
+
+        return `
+          <div class="flex items-start gap-3 relative z-10">
+            <div class="w-12 pt-2 flex-shrink-0 text-right">
+              <span class="text-xs font-extrabold text-amber-400 block">${slot.time}</span>
+            </div>
+            <div onclick="openDetailModal('${spotName}', '${slot.time}')" class="touch-card flex-1 bg-slate-900 border border-slate-800 p-3.5 rounded-2xl cursor-pointer transition active:scale-[0.98]">
+              <div class="flex items-center justify-between gap-2">
+                <h2 class="text-base font-black text-white leading-snug flex items-center gap-1.5">
+                  <span>${icon}</span>
+                  <span>${spotName}</span>
+                </h2>
+                ${dbItem.District ? `<span class="text-xs font-bold text-slate-400 flex-shrink-0">📍 ${dbItem.District}</span>` : ''}
+              </div>
+              ${subTitle ? `<p class="text-xs text-slate-400 mt-1 font-medium truncate">${subTitle}</p>` : ''}
+              
+              <!-- 概覽標籤膠囊 -->
+              <div class="flex flex-wrap items-center gap-1.5 mt-2 pt-2 border-t border-slate-800/80">
+                <span class="bg-indigo-950/80 text-indigo-300 border border-indigo-800/60 text-xs font-bold px-2 py-0.5 rounded-md">⏱️ ${durationMins}m</span>
+                ${dbItem.AvgCost !== undefined ? `<span class="bg-slate-800 text-amber-300 text-xs font-bold px-2 py-0.5 rounded-md">💰 ${dbItem.AvgCost == 0 ? '免費' : '¥' + dbItem.AvgCost}</span>` : ''}
+                ${subSpotsList.length > 0 ? `<span class="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold px-2 py-0.5 rounded-md">✨ ${subSpotsList.length} 大景點/打卡點</span>` : ''}
+              </div>
             </div>
           </div>
         `;
-      }
+      }).join('');
     }
 
-    function openDetailModal(itemName, slotTime = '') {
+    /* ----------------------------------------------------
+       第二層：多功能 Modal (景點/散步路線詳情)
+    ---------------------------------------------------- */
+    function openDetailModal(itemName, slotTime = '', isBackNavigation = false) {
+      if (!isBackNavigation && currentModalItem && currentModalItem !== itemName) {
+        modalHistory.push(currentModalItem);
+      }
+      currentModalItem = itemName;
+
       const dbItem = (currentData.restaurants && currentData.restaurants[itemName]) || 
                      (currentData.attractions && currentData.attractions[itemName]) || {};
 
-      const titles = parseTitles(itemName, dbItem);
       const icon = getItemIcon(dbItem.Type || dbItem['Rest.Type'], itemName);
+      const imageUrl = dbItem.ImageURL || dbItem.ImgURL || dbItem.Photo || dbItem.Pic;
+      const subSpots = parseSubSpots(dbItem.SubSpots);
 
-      const currentDateStr = currentData.schedule.days[selectedDayIndex];
-      const dateObj = new Date(currentDateStr);
-      const weekKey = WEEK_KEYS[dateObj.getDay()];
-      const todayHours = dbItem[weekKey] || dbItem.Hours || '請參考官方說明';
-
-      const itemType = (dbItem.Type || dbItem['Rest.Type'] || '').toLowerCase();
-      const isRestaurant = itemType.includes('餐廳') || itemType.includes('燒肉') || itemType.includes('壽司') || itemType.includes('拉麵') || dbItem.Tabelog評分 || dbItem.Tabelog;
-      const isHotel = itemType.includes('hotel') || itemType.includes('飯店') || itemType.includes('住宿') || itemName.includes('HOTEL') || itemName.includes('飯店');
-
-      const durationMins = parseDurationMins(dbItem.Duration);
-      const departureTime = calcDepartureTime(slotTime, durationMins);
+      // 返回上一頁按鈕 ( Modal History Stack )
+      const backBtnContainer = document.getElementById('modal-back-btn-container');
+      if (modalHistory.length > 0) {
+        const prevItem = modalHistory[modalHistory.length - 1];
+        backBtnContainer.innerHTML = `
+          <button onclick="popModalHistory()" class="text-xs text-amber-400 font-bold bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-lg hover:bg-amber-500/20 transition flex items-center gap-1">
+            ⬅️ 返回 ${prevItem}
+          </button>
+        `;
+      } else {
+        backBtnContainer.innerHTML = '';
+      }
 
       document.getElementById('modal-transit-steps').classList.add('hidden');
 
-      const imageUrl = dbItem.ImageURL || dbItem.ImgURL || dbItem.Photo || dbItem.Pic;
-
+      // Modal Header
       document.getElementById('modal-header').innerHTML = `
         ${imageUrl ? `
-          <div class="overflow-hidden rounded-2xl mb-2 border border-slate-700 max-h-48">
-            <img src="${imageUrl}" class="w-full h-full object-cover" alt="${titles.mainTitle}" onerror="this.style.display='none'">
+          <div class="overflow-hidden rounded-2xl mb-2 border border-slate-700 max-h-48 relative group cursor-pointer" onclick="openLightbox('${imageUrl}', '${itemName}')">
+            <img src="${imageUrl}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" alt="${itemName}">
+            <div class="absolute bottom-2 right-2 bg-slate-900/80 backdrop-blur-sm text-slate-200 text-xs px-2.5 py-1 rounded-lg border border-slate-700 flex items-center gap-1 font-bold">📷 預覽相簿</div>
           </div>
         ` : ''}
         <div class="flex items-center gap-2">
           <span class="text-3xl">${icon}</span>
           <div>
-            <h2 class="text-2xl font-black text-white leading-tight">${titles.mainTitle}</h2>
-            ${titles.subTitle ? `<p class="text-sm text-slate-400 font-medium">${titles.subTitle}</p>` : ''}
+            <h2 class="text-2xl font-black text-white leading-tight">${itemName}</h2>
+            ${dbItem.Type ? `<span class="text-xs text-amber-400 font-bold">${dbItem.Type}</span>` : ''}
           </div>
         </div>
       `;
 
-      let gridHTML = `
+      // 核心網格
+      document.getElementById('modal-grid').innerHTML = `
         <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
-          <p class="text-xs text-slate-400 font-bold">📍 所屬地區</p>
+          <p class="text-xs text-slate-400 font-bold">📍 所屬區域</p>
           <p class="text-base font-black text-white mt-0.5">${dbItem.District || '東京'}</p>
         </div>
         <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
-          <p class="text-xs text-slate-400 font-bold">⏱️ 停留與預計離開</p>
-          <p class="text-base font-black text-amber-300 mt-0.5">${durationMins} mins ${departureTime ? `(${departureTime} 離開)` : ''}</p>
+          <p class="text-xs text-slate-400 font-bold">⏱️ 建議停留</p>
+          <p class="text-base font-black text-amber-300 mt-0.5">${parseDurationMins(dbItem.Duration)} mins</p>
         </div>
       `;
 
-      if (isHotel) {
-        gridHTML += `
-          <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
-            <p class="text-xs text-slate-400 font-bold">🏨 類型</p>
-            <p class="text-base font-black text-amber-300 mt-0.5">飯店 / 住宿</p>
-          </div>
-          <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700 col-span-2">
-            <p class="text-xs text-slate-400 font-bold">📌 預訂 / 入住狀態</p>
-            <p class="text-base font-black text-emerald-400 mt-0.5">${dbItem.reservation || dbItem.BookingStatus || '已確認訂房'}</p>
-          </div>
-        `;
-      } else if (isRestaurant) {
-        gridHTML += `
-          <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
-            <p class="text-xs text-slate-400 font-bold">🕒 今日營業時間 (${weekKey})</p>
-            <p class="text-base font-black text-amber-300 mt-0.5 whitespace-pre-line">${formatHoursDisplay(todayHours)}</p>
-          </div>
-          <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
-            <p class="text-xs text-slate-400 font-bold">🍳 料理類型</p>
-            <p class="text-base font-black text-white mt-0.5">${dbItem['Rest.Type'] || dbItem.Type || '美食'}</p>
-          </div>
-          <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
-            <p class="text-xs text-slate-400 font-bold">💰 平均消費</p>
-            <p class="text-base font-black text-emerald-400 mt-0.5">${dbItem.AvgCost ? `¥${dbItem.AvgCost}` : '依現場為準'}</p>
-          </div>
-          <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700 col-span-2">
-            <p class="text-xs text-slate-400 font-bold">⭐ Tabelog 評分</p>
-            <p class="text-base font-black text-amber-400 mt-0.5">${dbItem.Tabelog評分 || dbItem.Tabelog || '高評價推薦'}</p>
-          </div>
-        `;
-      } else {
-        gridHTML += `
-          <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
-            <p class="text-xs text-slate-400 font-bold">🕒 開放 / 營業時間 (${weekKey})</p>
-            <p class="text-base font-black text-amber-300 mt-0.5 whitespace-pre-line">${formatHoursDisplay(todayHours)}</p>
-          </div>
-          <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
-            <p class="text-xs text-slate-400 font-bold">🏷️ 類別</p>
-            <p class="text-base font-black text-white mt-0.5">${dbItem.Type || '觀光景點'}</p>
-          </div>
-          <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700 col-span-2">
-            <p class="text-xs text-slate-400 font-bold">💰 預估費用</p>
-            <p class="text-base font-black text-emerald-400 mt-0.5">${dbItem.AvgCost ? `¥${dbItem.AvgCost}` : '免費 / 依現場'}</p>
-          </div>
-        `;
-      }
-
-      document.getElementById('modal-grid').innerHTML = gridHTML;
-
-      const criticalTime = dbItem['Book/Que_CriticalTime'] || dbItem.CriticalTime;
-      const queueLevel = dbItem.Level_of_Que || dbItem.reservation;
-      const planB = dbItem.Plan_B || dbItem.PlanB;
-      const comment = dbItem.Comment || dbItem.Notes;
-      const storyText = dbItem.Story || dbItem.Description;
-      const subSpots = parseSubSpots(dbItem.SubSpots);
-
+      // 重點提醒與 SubSpots 微型時間軸 (Micro-Timeline)
       let alertHTML = '';
-
-      if (criticalTime || queueLevel) {
-        alertHTML += `
-          <div class="bg-amber-500/10 border-l-4 border-amber-500 p-3.5 rounded-r-xl">
-            <p class="text-xs font-bold text-amber-400 uppercase tracking-wider">⚠️ 關鍵時間與提醒</p>
-            <p class="text-sm font-black text-amber-200 mt-1 whitespace-pre-line leading-relaxed">${criticalTime || ''} ${queueLevel ? `\n(${queueLevel})` : ''}</p>
-          </div>
-        `;
-      }
 
       if (subSpots.length > 0) {
         alertHTML += `
-          <div class="bg-indigo-950/40 border border-indigo-800/80 p-3.5 rounded-2xl space-y-2.5">
-            <div class="flex items-center justify-between">
+          <div class="bg-indigo-950/40 border border-indigo-800/80 p-4 rounded-2xl space-y-3">
+            <div class="flex items-center justify-between border-b border-indigo-800/60 pb-2">
               <p class="text-xs font-black text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
-                <span>🍡</span>
-                <span>包含景點 / 掃街店家清單 (${subSpots.length}處)</span>
+                <span>🗺️</span>
+                <span>散步路線微型時間軸 (${subSpots.length} 個站點)</span>
               </p>
-              <span class="text-[10px] text-slate-400 font-bold">資料庫連動中</span>
+              <span class="text-[10px] text-slate-400 font-bold">可勾選踩點進度</span>
             </div>
             
-            <div class="space-y-2.5 pt-1">
-              ${subSpots.map((spotName, i) => {
-                const subDb = (currentData.restaurants && currentData.restaurants[spotName]) || 
-                              (currentData.attractions && currentData.attractions[spotName]) || {};
-                
+            <div class="relative pl-4 space-y-4 before:absolute before:left-1.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-indigo-500/40">
+              ${subSpots.map((spot, i) => {
+                const subDb = (currentData.restaurants && currentData.restaurants[spot.name]) || 
+                              (currentData.attractions && currentData.attractions[spot.name]) || {};
                 const hasDbData = Object.keys(subDb).length > 0;
-                const subMapUrl = subDb.Gmap_URL || subDb.GmapURL || subDb.MapURL || subDb.Website || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(spotName)}`;
+                const subMapUrl = subDb.Gmap_URL || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(spot.name)}`;
+                const subImgUrl = subDb.ImageURL || subDb.Photo;
                 
-                const subType = subDb.Type || subDb['Rest.Type'] || '';
-                const subCost = subDb.AvgCost ? `¥${subDb.AvgCost}` : '';
-                const subRating = subDb.Tabelog評分 || subDb.Tabelog || '';
-                const subNotes = subDb.Comment || subDb.Notes || subDb['Book/Que_CriticalTime'] || '';
-                const subHours = subDb[weekKey] || subDb.Hours || '';
+                const isChecked = localStorage.getItem(getSubspotCheckKey(itemName, spot.name)) === 'true';
 
                 return `
-                  <div class="bg-slate-900/90 border border-slate-800 p-3 rounded-xl space-y-2 hover:border-slate-700 transition">
-                    <div class="flex items-start justify-between gap-2">
-                      <div class="flex items-start gap-2.5 flex-1">
-                        <input type="checkbox" id="spot-${i}" class="w-4 h-4 mt-1 accent-amber-400 rounded cursor-pointer flex-shrink-0">
-                        <div>
-                          <label for="spot-${i}" class="text-sm font-black text-slate-100 cursor-pointer hover:text-amber-300 leading-snug block">
-                            ${spotName}
+                  <div class="relative flex items-start justify-between gap-2 bg-slate-900/90 border border-slate-800 p-3 rounded-xl hover:border-slate-700 transition">
+                    <!-- 時間軸圓點 -->
+                    <div class="absolute -left-[21px] top-3.5 w-2.5 h-2.5 rounded-full bg-amber-400 ring-4 ring-slate-950"></div>
+
+                    <div class="flex items-start gap-2.5 flex-1">
+                      <input type="checkbox" id="spot-chk-${i}" ${isChecked ? 'checked' : ''} onchange="toggleSubspotCheck('${itemName}', '${spot.name}', this)" class="w-4 h-4 mt-1 accent-amber-400 rounded cursor-pointer flex-shrink-0">
+                      <div>
+                        <div class="flex items-center gap-2 flex-wrap">
+                          ${spot.time ? `<span class="text-xs font-black text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-md border border-amber-500/30">${spot.time}</span>` : ''}
+                          <label id="subspot-label-${itemName}-${spot.name}" for="spot-chk-${i}" class="text-sm font-black cursor-pointer leading-snug ${isChecked ? 'line-through text-slate-500' : 'text-slate-100'}">
+                            ${spot.name}
                           </label>
-                          ${(subType || subCost || subRating) ? `
-                            <div class="flex flex-wrap items-center gap-1.5 mt-1 text-[11px] font-bold">
-                              ${subType ? `<span class="bg-slate-800 text-slate-300 px-2 py-0.5 rounded">${subType}</span>` : ''}
-                              ${subCost ? `<span class="bg-emerald-950/80 text-emerald-300 px-2 py-0.5 rounded border border-emerald-800/60">${subCost}</span>` : ''}
-                              ${subRating ? `<span class="bg-amber-950/80 text-amber-300 px-2 py-0.5 rounded border border-amber-800/60">⭐ ${subRating}</span>` : ''}
-                            </div>
-                          ` : ''}
                         </div>
-                      </div>
-                      
-                      <div class="flex flex-col gap-1.5 items-end flex-shrink-0">
-                        <a href="${subMapUrl}" target="_blank" class="text-xs text-amber-400 font-bold bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-lg hover:bg-amber-500/20 transition flex items-center gap-1">
-                          📍 導航
-                        </a>
-                        ${hasDbData ? `
-                          <button onclick="openDetailModal('${spotName}')" class="text-[11px] text-slate-300 font-bold bg-slate-800 border border-slate-700 px-2 py-0.5 rounded-lg hover:bg-slate-700 transition">
-                            🔍 詳情
-                          </button>
+
+                        <!-- 特色屬性標籤 (Badges) -->
+                        ${spot.badges.length > 0 ? `
+                          <div class="flex flex-wrap gap-1 mt-1.5">
+                            ${spot.badges.map(b => `<span class="bg-indigo-900/80 text-indigo-200 border border-indigo-700/60 text-[10px] font-bold px-1.5 py-0.5 rounded">${b}</span>`).join('')}
+                          </div>
                         ` : ''}
                       </div>
                     </div>
-
-                    ${(subHours || subNotes) ? `
-                      <div class="pt-1.5 border-t border-slate-800/80 text-xs text-slate-300 space-y-1">
-                        ${subHours ? `<p class="text-amber-300/90 font-medium whitespace-pre-line">🕒 營業：${formatHoursDisplay(subHours)}</p>` : ''}
-                        ${subNotes ? `<p class="text-slate-400 font-medium leading-relaxed">📝 ${subNotes}</p>` : ''}
-                      </div>
-                    ` : ''}
+                    
+                    <div class="flex items-center gap-1 flex-shrink-0">
+                      <a href="${subMapUrl}" target="_blank" class="text-[11px] text-amber-400 font-bold bg-amber-500/10 border border-amber-500/30 px-2 py-1 rounded-md hover:bg-amber-500/20 transition">📍</a>
+                      ${subImgUrl ? `<button onclick="openLightbox('${subImgUrl}', '${spot.name}')" class="text-[11px] text-sky-300 font-bold bg-sky-950/80 border border-sky-800 px-2 py-1 rounded-md">🖼️</button>` : ''}
+                      ${hasDbData ? `<button onclick="openDetailModal('${spot.name}')" class="text-[11px] text-slate-300 font-bold bg-slate-800 border border-slate-700 px-2 py-1 rounded-md">🔍</button>` : ''}
+                    </div>
                   </div>
                 `;
               }).join('')}
@@ -926,171 +496,116 @@ const statusBadge = getCardStatusBadge({
         `;
       }
 
-      if (storyText) {
-        alertHTML += `
-          <div class="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700 space-y-1">
-            <p class="text-xs font-bold text-amber-400 flex items-center gap-1">
-              <span>📖</span> 景點背景與故事導覽
-            </p>
-            <p class="text-xs font-medium text-slate-300 leading-relaxed pt-1 whitespace-pre-line">${storyText}</p>
-          </div>
-        `;
-      }
-
-      if (comment) {
+      if (dbItem.Comment || dbItem.Notes) {
         alertHTML += `
           <div class="bg-slate-800/60 p-3.5 rounded-xl border border-slate-700/80">
-            <p class="text-xs font-bold text-slate-400">📝 備註與說明</p>
-            <p class="text-sm font-bold text-slate-200 mt-1 leading-relaxed whitespace-pre-line">${comment}</p>
+            <p class="text-xs font-bold text-slate-400">📝 路線備註與提醒</p>
+            <p class="text-sm font-bold text-slate-200 mt-1 leading-relaxed whitespace-pre-line">${dbItem.Comment || dbItem.Notes}</p>
           </div>
         `;
       }
 
-      if (planB) {
-        alertHTML += `
-          <div class="bg-indigo-950/50 border border-indigo-800/80 p-3.5 rounded-xl">
-            <p class="text-xs font-bold text-indigo-300">💡 備案 (Plan B)</p>
-            <p class="text-sm font-bold text-indigo-200 mt-1 whitespace-pre-line">${planB}</p>
-          </div>
-        `;
-      }
+      document.getElementById('modal-alerts').innerHTML = alertHTML;
 
-      // 順遊下一站模組
-      const nextStepHTML = renderNextStepModule(itemName, currentDateStr);
-
-      document.getElementById('modal-alerts').innerHTML = alertHTML + nextStepHTML;
-
-      const mapUrl = dbItem.Gmap_URL || dbItem.GmapURL || dbItem.MapURL || dbItem.Website || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(itemName)}`;
-      const menuUrl = dbItem.Menu || dbItem.MenuImgURL;
-
-      document.getElementById('modal-actions').innerHTML = `
-        <a href="${mapUrl}" target="_blank" class="flex-1 h-12 bg-amber-400 text-slate-950 font-black text-base rounded-xl flex items-center justify-center gap-2 shadow-lg active:scale-95 transition">
-          <span>📍</span>
-          <span>Google 地圖</span>
+      // 按鈕鏈：全程導航
+      const continuousMapUrl = dbItem.Gmap_URL || buildContinuousMapUrl(itemName, subSpots);
+      const actionsEl = document.getElementById('modal-actions');
+      actionsEl.classList.remove('hidden');
+      actionsEl.innerHTML = `
+        <a href="${continuousMapUrl}" target="_blank" class="flex-1 h-12 bg-amber-400 text-slate-950 font-black text-base rounded-xl flex items-center justify-center gap-2 shadow-lg active:scale-95 transition">
+          <span>🗺️</span>
+          <span>載入全程散步導航 (Google Maps)</span>
         </a>
-        ${menuUrl ? `
-          <a href="${menuUrl}" target="_blank" class="w-1/3 h-12 bg-slate-800 border border-slate-700 text-slate-200 font-bold text-sm rounded-xl flex items-center justify-center gap-1 active:scale-95 transition">
-            <span>📖</span>
-            <span>菜單</span>
-          </a>
-        ` : ''}
       `;
 
       showModal();
     }
 
+    function popModalHistory() {
+      if (modalHistory.length > 0) {
+        const prevItem = modalHistory.pop();
+        openDetailModal(prevItem, '', true);
+      }
+    }
+
+    /* ----------------------------------------------------
+       第二層：交通路線 Modal (特定班次標準化)
+    ---------------------------------------------------- */
     function openTransportModal(fullRoute) {
       const routeParts = fullRoute.split(/→|➔/).map(p => p.trim());
-      const isMultiLeg = routeParts.length > 2;
+      const transInfo = (currentData && currentData.transports && currentData.transports[fullRoute]) || {};
 
       document.getElementById('modal-header').innerHTML = `
-        <h2 class="text-2xl font-black text-white flex items-center gap-2">
-          <span>🚌</span> 路線指南
-        </h2>
+        <h2 class="text-2xl font-black text-white flex items-center gap-2"><span>🚌</span> 路線指南</h2>
         <p class="text-lg text-amber-400 font-extrabold mt-1">${routeParts.join(' ➔ ')}</p>
       `;
 
-      let segments = [];
-      if (isMultiLeg) {
-        for (let i = 0; i < routeParts.length - 1; i++) {
-          const from = routeParts[i];
-          const to = routeParts[i + 1];
-          const info = findTransportInfo(`${from}➔${to}`, [from, to]);
-          segments.push({ from, to, info });
-        }
-      } else {
-        const from = routeParts[0];
-        const to = routeParts[1] || '';
-        const info = findTransportInfo(fullRoute, routeParts);
-        segments.push({ from, to, info });
-      }
+      // 班次分隔化解析 (相容逗號、斜線與換行)
+      const rawTimetable = transInfo.Timetable || transInfo['特定班次'] || '';
+      const timetables = rawTimetable.split(/[,，/\n]/).map(t => t.trim()).filter(Boolean);
 
       const stepsContainer = document.getElementById('modal-transit-steps');
       stepsContainer.classList.remove('hidden');
-
-      stepsContainer.innerHTML = segments.map((seg, idx) => {
-        const info = seg.info || {};
-        const timeFormatted = formatMins(info.Time || info.Duration);
-        const timetables = (info.Timetable || info['時刻表'] || '').split('/').filter(Boolean);
-        const liveUrl = info.LiveUrl || info.Link2 || info['實時位置連結'];
-        const routeTips = info.RouteTips || info.RouteGuide || info.WalkingTips || info['路線提示'];
-        const videoUrl = info.VideoURL || info.Video;
-
-        return `
-          <div class="bg-slate-800/90 border border-slate-700 p-4 rounded-2xl space-y-2.5">
-            <div class="flex justify-between items-center border-b border-slate-700/80 pb-2">
-              <span class="text-xs font-black bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-md">第 ${idx + 1} 段移動</span>
-              <span class="text-xs font-bold text-slate-400">⏱️ ${timeFormatted}</span>
-            </div>
-
-            <div class="text-base font-black text-white mt-1">
-              ${seg.from} <span class="text-amber-400">➔</span> ${seg.to}
-            </div>
-
-            ${info.Platform || info.DeparturePlatform ? `
-              <div class="text-xs text-amber-200 bg-amber-950/40 border border-amber-800/60 p-2 rounded-lg font-bold">
-                🏣 乘車處/月台：${info.Platform || info.DeparturePlatform}
-              </div>
-            ` : ''}
-
-            ${info.Line || info.RouteName ? `
-              <div class="text-xs text-slate-300 font-bold">
-                🚇 搭乘路線：<span class="text-white">${info.Line || info.RouteName}</span>
-              </div>
-            ` : ''}
-
-            ${routeTips ? `
-              <div class="bg-slate-900/90 p-3 rounded-xl border border-slate-700/80">
-                <p class="text-xs font-black text-amber-400 mb-1 flex items-center gap-1">🚶 步行/防迷路文字指引</p>
-                <p class="text-xs text-slate-200 leading-relaxed font-medium whitespace-pre-line">${routeTips}</p>
-              </div>
-            ` : ''}
-
-            ${videoUrl ? `
-              <div class="pt-1">
-                <a href="${videoUrl}" target="_blank" class="w-full py-2 bg-sky-950/80 hover:bg-sky-900 border border-sky-700 text-sky-200 text-xs font-black rounded-xl flex items-center justify-center gap-1.5 transition">
-                  <span>▶️</span> 觀看實景走法影片 (YouTube)
-                </a>
-              </div>
-            ` : ''}
-
-            ${timetables.length > 0 ? `
-              <div class="pt-1">
-                <p class="text-[11px] font-bold text-slate-400 mb-1">⏰ 建議班次時刻表：</p>
-                <div class="flex flex-wrap gap-1.5">
-                  ${timetables.map(t => `<span class="bg-slate-900 border border-slate-700 text-amber-300 text-xs font-black px-2 py-0.5 rounded">${t}</span>`).join('')}
-                </div>
-              </div>
-            ` : ''}
-
-            ${info.Remarks || info.Notes ? `
-              <p class="text-xs text-slate-300 bg-slate-900/60 p-2 rounded-lg border border-slate-800 font-medium">💬 備註：${info.Remarks || info.Notes}</p>
-            ` : ''}
-
-            ${liveUrl ? `
-              <div class="pt-1">
-                <a href="${liveUrl}" target="_blank" class="inline-flex items-center gap-1 text-xs text-sky-400 hover:text-sky-300 font-bold underline">
-                  🔗 查看實時交通位置
-                </a>
-              </div>
-            ` : ''}
+      stepsContainer.innerHTML = `
+        <div class="bg-slate-800/90 border border-slate-700 p-4 rounded-2xl space-y-3">
+          <div class="flex justify-between items-center border-b border-slate-700/80 pb-2">
+            <span class="text-xs font-black bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-md">移動接駁</span>
+            <span class="text-xs font-bold text-slate-300">⏱️ ${formatMins(transInfo.Time || transInfo.Duration)}</span>
           </div>
-        `;
-      }).join('');
 
-      document.getElementById('modal-grid').innerHTML = '';
-      document.getElementById('modal-alerts').innerHTML = '';
+          ${timetables.length > 0 ? `
+            <div class="pt-1">
+              <p class="text-xs font-bold text-slate-300 mb-1.5">⏰ 建議特定班次：</p>
+              <div class="flex flex-wrap gap-1.5">
+                ${timetables.map(t => `<span class="bg-slate-900 border border-slate-700 text-amber-300 text-xs font-black px-2 py-0.5 rounded-md">${t}</span>`).join('')}
+              </div>
+            </div>
+          ` : ''}
 
-      const mainNavUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(routeParts[0])}&destination=${encodeURIComponent(routeParts[routeParts.length - 1])}`;
+          ${transInfo.Remarks || transInfo.Notes ? `<p class="text-xs text-slate-200 bg-slate-900/60 p-2 rounded-lg border border-slate-800">${transInfo.Remarks || transInfo.Notes}</p>` : ''}
+        </div>
 
-      document.getElementById('modal-actions').innerHTML = `
-        <a href="${mainNavUrl}" target="_blank" class="w-full h-12 bg-amber-400 text-slate-950 font-black text-base rounded-xl flex items-center justify-center gap-2 active:scale-95 transition shadow-lg">
+        <a href="https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(routeParts[0])}&destination=${encodeURIComponent(routeParts[1]||'')}" target="_blank" class="w-full h-11 bg-amber-400 text-slate-950 font-black text-sm rounded-xl flex items-center justify-center gap-2 active:scale-95 transition shadow-lg my-1">
           <span>🗺️</span>
           <span>開啟 Google 路線導航</span>
         </a>
       `;
 
+      document.getElementById('modal-grid').innerHTML = '';
+      document.getElementById('modal-alerts').innerHTML = '';
+      const actionsEl = document.getElementById('modal-actions');
+      actionsEl.innerHTML = '';
+      actionsEl.classList.add('hidden');
+
       showModal();
+    }
+
+    /* ----------------------------------------------------
+       第三層：Lightbox 全螢幕預覽與 Modal 控制
+    ---------------------------------------------------- */
+    function openLightbox(src, caption = '') {
+      if (!src) return;
+      const overlay = document.getElementById('lightbox-overlay');
+      const img = document.getElementById('lightbox-img');
+      const captionEl = document.getElementById('lightbox-caption');
+
+      img.src = src;
+      captionEl.textContent = caption || '圖片預覽';
+      overlay.classList.remove('hidden');
+      setTimeout(() => {
+        overlay.classList.remove('opacity-0');
+        img.classList.remove('scale-95');
+        img.classList.add('scale-100');
+      }, 10);
+    }
+
+    function closeLightbox() {
+      const overlay = document.getElementById('lightbox-overlay');
+      const img = document.getElementById('lightbox-img');
+      overlay.classList.add('opacity-0');
+      img.classList.remove('scale-100');
+      img.classList.add('scale-95');
+      setTimeout(() => { overlay.classList.add('hidden'); img.src = ''; }, 200);
     }
 
     function showModal() {
@@ -1102,23 +617,19 @@ const statusBadge = getCardStatusBadge({
         sheet.classList.remove('translate-y-full');
       }, 10);
     }
-// 清理景點名稱（去掉 | 之後的說明）
-function getCleanSpotName(rawName) {
-  if (!rawName) return '';
-  return rawName.split('|')[0].trim();
-}
+
     function closeModal(e) {
       if (e.target.id === 'modal-overlay') closeModalDirect();
     }
 
     function closeModalDirect() {
+      modalHistory = [];
+      currentModalItem = null;
       const overlay = document.getElementById('modal-overlay');
       const sheet = document.getElementById('modal-sheet');
       sheet.classList.add('translate-y-full');
       overlay.classList.add('opacity-0');
-      setTimeout(() => {
-        overlay.classList.add('hidden');
-      }, 200);
+      setTimeout(() => { overlay.classList.add('hidden'); }, 200);
     }
 
     window.addEventListener('DOMContentLoaded', fetchLatestData);
