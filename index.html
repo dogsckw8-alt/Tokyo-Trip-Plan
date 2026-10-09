@@ -52,7 +52,7 @@
     </div>
   </main>
 
-  <!-- 第二層：Bottom Sheet Modal (完整時刻表/分段導航/影片/SubSpots) -->
+  <!-- 第二層：Bottom Sheet Modal (交通時刻表對照/分段導航/影片/SubSpots) -->
   <div id="modal-overlay" class="fixed inset-0 bg-black/80 z-40 flex flex-col justify-end hidden opacity-0 transition-opacity duration-200" onclick="closeModal(event)">
     <div id="modal-sheet" class="bg-slate-900 border-t border-slate-700 rounded-t-3xl max-h-[90vh] flex flex-col overflow-hidden transform translate-y-full transition-transform duration-300 shadow-2xl" onclick="event.stopPropagation()">
 
@@ -82,7 +82,7 @@
     </div>
   </div>
 
-  <!-- 第三層：Lightbox 全螢幕圖片預覽 Modal -->
+  <!-- 第三層：Lightbox 全螢幕圖片/時刻表預覽 Modal -->
   <div id="lightbox-overlay" class="fixed inset-0 bg-black/95 z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-200 p-4" onclick="closeLightbox()">
     <button onclick="closeLightbox()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-3xl font-bold z-50 p-2 bg-slate-900/80 rounded-full w-12 h-12 flex items-center justify-center border border-slate-700">✕</button>
     <div class="relative max-w-full max-h-full flex items-center justify-center" onclick="event.stopPropagation()">
@@ -92,7 +92,7 @@
   </div>
 
   <script>
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyPhyYaZhVCE3LyP7wfK_O3t3pACmjKHo53kET2F2K6YMf6DgyNWxcMxHGFVyIGkp7Nug/exec";
+    const GAS_API_URL = "myapi";
 
     let currentData = null;
     let selectedDayIndex = 0;
@@ -239,6 +239,27 @@
       const str = String(hoursStr).trim();
       if (!str) return '請參考官方說明';
       return str.replace(/(\d{1,2}:\d{2}\s*[-~～]\s*\d{1,2}:\d{2})[\s,;/]+(\d{1,2}:\d{2}\s*[-~～]\s*\d{1,2}:\d{2})/g, '$1\n$2');
+    }
+
+    /* ----------------------------------------------------
+       班次提取與高亮解析輔助函數
+    ---------------------------------------------------- */
+    // 提取用 ** 包裹的目標班次 (例: 11:55,12:30,**13:30**,13:55 -> 13:30)
+    function extractTargetClass(timetableStr) {
+      if (!timetableStr) return null;
+      const match = String(timetableStr).match(/\*\*(.*?)\*\*/);
+      return match ? match[1].trim() : null;
+    }
+
+    // 解析完整的班次清單，傳回包含 isTarget 標記的陣列
+    function parseTimetableList(timetableStr) {
+      if (!timetableStr) return [];
+      const items = String(timetableStr).split(/[,，/\n]/).map(s => s.trim()).filter(Boolean);
+      return items.map(item => {
+        const isTarget = item.includes('**');
+        const cleanTime = item.replace(/\*\*/g, '').trim();
+        return { time: cleanTime, isTarget };
+      });
     }
 
     /* ----------------------------------------------------
@@ -541,7 +562,7 @@
     }
 
     /* ----------------------------------------------------
-       第一層：恢復 Old Version 豐富卡片設計 (Rich Timeline Cards)
+       第一層：時間軸卡片 (交通卡加強「🎯 目標班次」膠囊，景點保持豐富舊版)
     ---------------------------------------------------- */
     function renderTimeline(currentDayKey) {
       console.log('正在渲染 Day:', currentDayKey);
@@ -581,6 +602,14 @@
 
           const feeBadge = formatFeeDisplay(feeVal);
 
+          // 提取 **XX:XX** 目標班次
+          const timetableRaw = transInfo.Timetable || transInfo['特定班次'] || transInfo.TimeTable || '';
+          const targetTime = extractTargetClass(timetableRaw);
+
+          const targetBadge = targetTime
+            ? `<span class="bg-rose-950/90 text-rose-300 border border-rose-600/80 px-2.5 py-1 rounded-lg text-xs font-black flex items-center gap-1 shadow-sm">🎯 目標班次 ${targetTime}</span>`
+            : '';
+
           return `
             <div class="flex items-start gap-3 relative z-10">
               <div class="w-12 pt-2 flex-shrink-0 text-right">
@@ -601,6 +630,7 @@
                 </div>
 
                 <div class="flex flex-wrap items-center gap-2 mt-2 pt-2 border-t border-slate-800 text-sm font-bold text-slate-300">
+                  ${targetBadge}
                   <span class="bg-amber-500/20 text-amber-300 px-2.5 py-1 rounded-lg">⏱️ ${durationStr}</span>
                   ${feeBadge}
                   ${transInfo.Line ? `<span class="bg-slate-800 text-slate-300 px-2.5 py-1 rounded-lg">🚇 ${transInfo.Line}</span>` : ''}
@@ -769,7 +799,7 @@
     }
 
     /* ----------------------------------------------------
-       第二層：恢復 Old Version 景點/餐廳 Modal (保留 SubSpot 新微型時間軸設計)
+       第二層：景點/餐廳 Modal (保留 SubSpot 散步路線微型時間軸新設計)
     ---------------------------------------------------- */
     function openDetailModal(itemName, slotTime = '', isBackNavigation = false) {
       if (!isBackNavigation && currentModalItem && currentModalItem !== itemName) {
@@ -1028,7 +1058,7 @@
     }
 
     /* ----------------------------------------------------
-       第二層：恢復 Old Version 多分段交通 Modal 完整介面
+       第二層：交通 Modal (完整班次對照 + 警告提醒 + 媒體按鈕)
     ---------------------------------------------------- */
     function openTransportModal(fullRoute) {
       const routeParts = fullRoute.split(/→|➔/).map(p => p.trim());
@@ -1062,10 +1092,18 @@
       stepsContainer.innerHTML = segments.map((seg, idx) => {
         const info = seg.info || {};
         const timeFormatted = formatMins(info.Time || info.Duration);
-        const timetables = (info.Timetable || info['特定班次'] || '').split(/[,，/\n]/).map(t => t.trim()).filter(Boolean);
+        
+        // 班次與高亮解析
+        const timetableRaw = info.Timetable || info['特定班次'] || info.TimeTable || '';
+        const parsedTimetables = parseTimetableList(timetableRaw);
+
         const liveUrl = info.LiveUrl || info.Link2 || info['實時位置連結'] || info.Options;
         const routeTips = info.RouteTips || info.RouteGuide || info.WalkingTips || info['路線提示'];
-        const videoUrl = info.VideoURL || info.Video;
+        const videoUrl = info.VideoURL || info.Video || info.video_url;
+
+        // 時刻表圖片 vs PDF/網址
+        const timetablePic = info.timeTable_pic_url || info.TimeTable_Pic_URL || info.timeTable_pic || info.TimeTable_Pic;
+        const timetableLink = info.TimeTable || info.TimeTableURL || info.timetable_url;
 
         let feeBadge = '';
         if (info.Fee !== undefined && info.Fee !== null && String(info.Fee).trim() !== '') {
@@ -1109,6 +1147,31 @@
                 </div>
               ` : ''}
 
+              <!-- 完整班次對照表（目標紅色加粗，前後半透明灰字） -->
+              ${parsedTimetables.length > 0 ? `
+                <div class="pt-1">
+                  <p class="text-xs font-black text-slate-300 mb-2 flex items-center gap-1">⏰ 班次時刻對照表：</p>
+                  <div class="flex flex-wrap gap-2 items-center">
+                    ${parsedTimetables.map(t => {
+                      if (t.isTarget) {
+                        return `<span class="bg-rose-950/90 border-2 border-rose-500 text-rose-300 text-sm font-black px-3 py-1 rounded-xl shadow-lg shadow-rose-950/50 flex items-center gap-1 scale-105">🎯 ${t.time}</span>`;
+                      } else {
+                        return `<span class="bg-slate-900/60 border border-slate-800 text-slate-400 opacity-60 text-xs font-semibold px-2.5 py-1 rounded-lg">${t.time}</span>`;
+                      }
+                    }).join('')}
+                  </div>
+                </div>
+              ` : ''}
+
+              <!-- 乘車/票券注意事項 Warnings -->
+              ${(info.Remarks || info.Notes) ? `
+                <div class="bg-rose-950/40 border-l-4 border-rose-500 p-3.5 rounded-r-xl">
+                  <p class="text-xs font-bold text-rose-400 uppercase tracking-wider mb-0.5">⚠️ 乘車與票券注意事項</p>
+                  <p class="text-sm font-bold text-rose-200 leading-relaxed whitespace-pre-line">${info.Remarks || info.Notes}</p>
+                </div>
+              ` : ''}
+
+              <!-- 詳細文字指引 -->
               ${routeTips ? `
                 <div class="bg-slate-900/90 p-3.5 rounded-xl border border-slate-700/80">
                   <p class="text-sm font-black text-amber-400 mb-1 flex items-center gap-1">🚶 步行/防迷路文字指引</p>
@@ -1116,25 +1179,31 @@
                 </div>
               ` : ''}
 
-              ${videoUrl ? `
+              <!-- 時刻表按鈕 (優先開啟圖片 Lightbox，無圖片則開啟 PDF/官網) -->
+              ${timetablePic ? `
                 <div class="pt-1">
-                  <a href="${videoUrl}" target="_blank" class="w-full py-2.5 bg-sky-950/80 hover:bg-sky-900 border border-sky-700 text-sky-200 text-sm font-black rounded-xl flex items-center justify-center gap-1.5 transition">
-                    <span>▶️</span> 觀看實景走法影片 (YouTube)
+                  <button onclick="openLightbox('${timetablePic}', '${seg.from} ➔${seg.to} 官方時刻表')" class="w-full py-2.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-300 text-sm font-black rounded-xl flex items-center justify-center gap-2 transition active:scale-95 shadow">
+                    <span>📄</span>
+                    <span>查看官方時刻表 (圖片)</span>
+                  </button>
+                </div>
+              ` : (timetableLink ? `
+                <div class="pt-1">
+                  <a href="${timetableLink}" target="_blank" rel="noopener noreferrer" class="w-full py-2.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-300 text-sm font-black rounded-xl flex items-center justify-center gap-2 transition active:scale-95 shadow">
+                    <span>📄</span>
+                    <span>開啟官方時刻表 (PDF / 官網)</span>
                   </a>
                 </div>
-              ` : ''}
+              ` : '')}
 
-              ${timetables.length > 0 ? `
+              <!-- 影片按鈕 (直接開啟新頁籤播放 YouTube) -->
+              ${videoUrl ? `
                 <div class="pt-1">
-                  <p class="text-sm font-bold text-slate-300 mb-1.5">⏰ 建議特定班次：</p>
-                  <div class="flex flex-wrap gap-2">
-                    ${timetables.map(t => `<span class="bg-slate-900 border border-slate-700 text-amber-300 text-sm font-black px-2.5 py-1 rounded-md">${t}</span>`).join('')}
-                  </div>
+                  <a href="${videoUrl}" target="_blank" rel="noopener noreferrer" class="w-full py-2.5 bg-sky-950/90 hover:bg-sky-900 border border-sky-700 text-sky-200 text-sm font-black rounded-xl flex items-center justify-center gap-2 transition active:scale-95 shadow">
+                    <span>🎬</span>
+                    <span>觀看實景走法影片 (YouTube)</span>
+                  </a>
                 </div>
-              ` : ''}
-
-              ${info.Remarks || info.Notes ? `
-                <p class="text-sm text-slate-200 bg-slate-900/60 p-2.5 rounded-lg border border-slate-800 font-medium leading-relaxed">💬 備註：${info.Remarks || info.Notes}</p>
               ` : ''}
 
               ${liveUrl ? `
@@ -1166,7 +1235,7 @@
     }
 
     /* ----------------------------------------------------
-       第三層：Lightbox 全螢幕圖片預覽控制
+       第三層：Lightbox 全螢幕圖片/時刻表預覽控制
     ---------------------------------------------------- */
     function openLightbox(src, caption = '') {
       if (!src) return;
