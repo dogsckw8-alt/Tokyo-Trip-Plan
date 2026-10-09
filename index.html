@@ -840,7 +840,7 @@
 
       document.getElementById('modal-transit-steps').classList.add('hidden');
 
-      const imageUrl = dbItem.ImageURL || dbItem.ImgURL || dbItem.Photo || dbItem.Pic;
+      const imageUrl = dbItem.ImageURL || dbItem.ImgURL || dbItem.ImgUrl || dbItem.imageUrl || dbItem.imgUrl || dbItem.Photo || dbItem.Pic || dbItem.Picture;
 
       document.getElementById('modal-header').innerHTML = `
         ${imageUrl ? `
@@ -957,7 +957,7 @@
                 
                 const hasDbData = Object.keys(subDb).length > 0;
                 const subMapUrl = subDb.Gmap_URL || subDb.GmapURL || subDb.MapURL || subDb.Website || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(spot.name)}`;
-                const subImgUrl = subDb.ImageURL || subDb.ImgURL || subDb.Photo || subDb.Pic;
+                const subImgUrl = subDb.ImageURL || subDb.ImgURL || subDb.ImgUrl || subDb.imageUrl || subDb.imgUrl || subDb.Photo || subDb.Pic || subDb.Picture;
                 const isChecked = localStorage.getItem(getSubspotCheckKey(itemName, spot.name)) === 'true';
 
                 return `
