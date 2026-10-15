@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+    <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
@@ -104,16 +104,31 @@
     async function fetchLatestData() {
       const dotEl = document.getElementById('sync-dot');
       const textEl = document.getElementById('sync-text');
-      dotEl.className = "w-3 h-3 rounded-full bg-amber-400 animate-ping";
-      textEl.textContent = "讀取中...";
 
+      // 1. 優先讀取 localStorage 快取實現「秒開」
+      const cachedJSON = localStorage.getItem('travel_app_cache');
+      if (cachedJSON) {
+        try {
+          currentData = JSON.parse(cachedJSON);
+          renderApp();
+          dotEl.className = "w-3 h-3 rounded-full bg-emerald-400";
+          textEl.textContent = "已從快取載入";
+        } catch (e) {
+          console.error("解析本地快取失敗", e);
+        }
+      } else {
+        dotEl.className = "w-3 h-3 rounded-full bg-amber-400 animate-ping";
+        textEl.textContent = "讀取中...";
+      }
+
+      // 2. 背景非同步請求更新最新資料
       try {
         const res = await fetch(GAS_API_URL);
         const json = await res.json();
-        console.log("1. API 原始回傳資料:", json);
         if (json.status === 'success') {
           currentData = json;
-          console.log("2. 寫入後的 currentData:", currentData);
+          // 將最新資料存入 localStorage
+          localStorage.setItem('travel_app_cache', JSON.stringify(json));
           dotEl.className = "w-3 h-3 rounded-full bg-emerald-400";
           textEl.textContent = "已同步";
           renderApp();
@@ -121,8 +136,12 @@
           throw new Error(json.message);
         }
       } catch (err) {
-        dotEl.className = "w-3 h-3 rounded-full bg-rose-500";
-        textEl.textContent = "同步失敗";
+        if (!cachedJSON) {
+          dotEl.className = "w-3 h-3 rounded-full bg-rose-500";
+          textEl.textContent = "同步失敗";
+        } else {
+          textEl.textContent = "離線模式 (顯示快取)";
+        }
         console.error(err);
       }
     }
