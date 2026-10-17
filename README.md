@@ -5,9 +5,6 @@ tokyo-travel-app/
 │
 ├── index.html              ─── [骨架] 純粹的 HTML 網頁結構
 │
-├── css/
-│   └── style.css           ─── [裝潢] 自訂的美化樣式與動畫
-│
 └── js/
     ├── config.js           ─── [設定] API 網址、週別常數設定
     ├── utils.js            ─── [工具箱] 算時間、轉換文字、抓圖示等純邏輯
