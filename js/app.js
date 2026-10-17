@@ -259,7 +259,7 @@ import { getCleanSpotName,parseDurationMins,getBetweenSpotsTransport,
         let shortWalkHTML = '';
         if (isShortWalkToNext) {
           const nextClean = getCleanSpotName(nextRawName);
-          const matchedTrans = getBetweenSpotsTransport(spotName, nextClean);
+          const matchedTrans = getBetweenSpotsTransport(currentData, spotName, nextClean);
 
           if (matchedTrans) {
             const durationStr = formatMins(matchedTrans.Time || matchedTrans.Duration);

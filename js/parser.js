@@ -19,7 +19,7 @@
       return match ? parseInt(match[0], 10) : 60;
     }
 
-    export function getBetweenSpotsTransport(fromSpot, toSpot) {
+    export function getBetweenSpotsTransport(currentData, fromSpot, toSpot) {
       if (!currentData || !currentData.transports || !fromSpot || !toSpot) return null;
       
       const cleanFrom = getCleanSpotName(fromSpot);
