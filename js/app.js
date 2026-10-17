@@ -1,10 +1,10 @@
-import { CONFIG,WEEK_DAYS,WEEK_KEYS } from './config.js';
+import { CONFIG,WEEK_DAYS,WEEK_KEYS } from './js/config.js';
 import { getCleanSpotName,parseDurationMins,getBetweenSpotsTransport,
          calcDepartureTime,formatMins,formatFeeDisplay,formatHoursDisplay,
          extractTargetClass,parseTimetableList,parseSubSpots,getSubspotCheckKey,
          toggleSubspotCheck,buildContinuousMapUrl,calcMultiLegTime,calcMultiLegFee,
          timeToMins,getBestOpenTime,parseCellContent,getCardStatusBadge
-        } from './parser.js';
+        } from './js/parser.js';
 
 
     let currentData = null;
