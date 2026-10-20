@@ -254,30 +254,40 @@
       return closestTime;
     }
 
-    export function parseCellContent(rawString) {
-      if (!rawString) return { spotName: '', subTitle: '', notice: '', openTime: null, queueTime: null, leaveTime: null };
+export function parseCellContent(rawInput) {
+      // 如果後端已經傳回物件格式 (包含 name 與 notice)
+      if (rawInput && typeof rawInput === 'object') {
+        const spotName = rawInput.name || '';
+        const notice = rawInput.notice || '';
+        const subTitle = ''; // 如果有副標題可按需擴充
+        
+        // 從 notice 中解析時間點
+        const openMatch = notice.match(/(\d{1,2}:\d{2})\s*(?:營業|開店|開門)|(?:營業|開店|開門)\s*(\d{1,2}:\d{2})/);
+        const openTime = openMatch ? (openMatch[1] || openMatch[2]) : null;
 
-      const parts = rawString.split('|').map(s => s.trim());
+        const leaveMatch = notice.match(/(\d{1,2}:\d{2})\s*(?:前)?(?:必須)?離開|(?:前|必須)?離開\s*(\d{1,2}:\d{2})/);
+        const leaveTime = leaveMatch ? (leaveMatch[1] || leaveMatch[2]) : null;
+
+        const queueMatch = notice.match(/(\d{1,2}:\d{2})\s*(?:排隊|抵達|集合)|(?:排隊|抵達|集合|建議)\s*(\d{1,2}:\d{2})/);
+        let queueTime = queueMatch ? (queueMatch[1] || queueMatch[2]) : null;
+
+        if (!queueTime && !openTime && !leaveTime) {
+          const simpleTimeMatch = notice.match(/(\d{1,2}:\d{2})/);
+          if (simpleTimeMatch) queueTime = simpleTimeMatch[1];
+        }
+
+        return { spotName, subTitle, notice, openTime, queueTime, leaveTime };
+      }
+
+      // 保持原本的字串解析相容性
+      if (!rawString) return { spotName: '', subTitle: '', notice: '', openTime: null, queueTime: null, leaveTime: null };
+      
+      const parts = String(rawString).split('|').map(s => s.trim());
       const spotName = parts[0] || '';
       const subTitle = parts[1] || '';
       const notice = parts.slice(2).join(' ') || '';
-
-      const openMatch = notice.match(/(\d{1,2}:\d{2})\s*(?:營業|開店|開門)|(?:營業|開店|開門)\s*(\d{1,2}:\d{2})/);
-      const openTime = openMatch ? (openMatch[1] || openMatch[2]) : null;
-
-      const leaveMatch = notice.match(/(\d{1,2}:\d{2})\s*(?:前)?(?:必須)?離開|(?:前|必須)?離開\s*(\d{1,2}:\d{2})/);
-      const leaveTime = leaveMatch ? (leaveMatch[1] || leaveMatch[2]) : null;
-
-      const queueMatch = notice.match(/(\d{1,2}:\d{2})\s*(?:排隊|抵達|集合)|(?:排隊|抵達|集合|建議)\s*(\d{1,2}:\d{2})/);
-      let queueTime = queueMatch ? (queueMatch[1] || queueMatch[2]) : null;
-
-      if (!queueTime && !openTime && !leaveTime) {
-        const simpleTimeMatch = notice.match(/(\d{1,2}:\d{2})/);
-        if (simpleTimeMatch) queueTime = simpleTimeMatch[1];
-      }
-
-      return { spotName, subTitle, notice, openTime, queueTime, leaveTime };
     }
+
 
     export function getCardStatusBadge({ slotTime, dbItem, parsedNotice, weekKey }) {
       const { notice, openTime, queueTime, leaveTime } = parsedNotice;
