@@ -68,18 +68,27 @@ export function renderTimeline(currentDayKey) {
   if (!container) return;
 
   const timeline = currentData.schedule.timeline;
-  const dayItems = timeline.filter(slot => slot.items[currentDayKey]);
+  let dayItems = [];
+
+  // 🛡️ 防禦性編程護城河：同時兼容「舊陣列格式」與「新物件格式」
+  if (Array.isArray(timeline)) {
+    // 舊結構防護：如果是陣列，用 .filter
+    dayItems = timeline.filter(slot => slot.items && slot.items[currentDayKey]);
+  } else if (timeline && typeof timeline === 'object') {
+    // 新結構：如果是物件，直接以日期 Key 取出陣列
+    dayItems = timeline[currentDayKey] || [];
+  }
 
   if (dayItems.length === 0) {
     container.innerHTML = '<div class="text-center text-slate-400 py-12 text-lg">☕ 本日尚無排定行程</div>';
     return;
   }
-
   const dateObj = new Date(currentDayKey);
   const weekKey = WEEK_KEYS[dateObj.getDay()] || '';
 
   container.innerHTML = dayItems.map((slot, idx) => {
-    const rawName = slot.items[currentDayKey];
+    // 💡 修正：新結構中 slot 直接就是單一行程物件 { time, name, duration, departure, notice }
+    const rawName = slot.name; 
     const isTransport = rawName.includes('→') || rawName.includes('➔');
 
     if (isTransport) {
@@ -138,7 +147,8 @@ export function renderTimeline(currentDayKey) {
       `;
     }
 
-    const parsedNotice = parseCellContent(rawName);
+    // 傳入帶有 spotName 與 notice 的物件給 parseCellContent
+    const parsedNotice = parseCellContent(slot);
     const { spotName, subTitle } = parsedNotice;
 
     const dbItem = (currentData.restaurants && currentData.restaurants[spotName]) || 
@@ -148,7 +158,7 @@ export function renderTimeline(currentDayKey) {
     const statusBadge = getCardStatusBadge({ slotTime: slot.time, dbItem, parsedNotice, weekKey });
 
     const nextSlot = dayItems[idx + 1];
-    const nextRawName = nextSlot ? nextSlot.items[currentDayKey] : null;
+    const nextRawName = nextSlot ? nextSlot.name : null;
     const nextIsTransport = nextRawName ? (nextRawName.includes('→') || nextRawName.includes('➔')) : false;
     const isShortWalkToNext = nextSlot && !nextIsTransport;
 
@@ -185,8 +195,10 @@ export function renderTimeline(currentDayKey) {
     const icon = getItemIcon(dbItem.Type || dbItem['Rest.Type'], spotName);
     const reservationBadge = getReservationBadge(dbItem.reservation || dbItem.BookingStatus);
     const subSpotsList = parseSubSpots(dbItem.SubSpots);
-    const durationMins = parseDurationMins(dbItem.Duration);
-    const departureTime = calcDepartureTime(displayTime, durationMins);
+    
+    // 💡 優先使用試算表算好的 duration 與 departure，若無才用 DB 預設
+    const durationMins = slot.duration || parseDurationMins(dbItem.Duration);
+    const departureTime = slot.departure || calcDepartureTime(displayTime, durationMins);
 
     return `
       <div class="flex items-start gap-3 relative z-10">
