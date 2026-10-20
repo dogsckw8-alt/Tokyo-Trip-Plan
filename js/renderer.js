@@ -243,11 +243,13 @@ export function renderTimeline(currentDayKey) {
    順遊下一站小模組
 ---------------------------------------------------- */
 export function renderNextStepModule(itemName, currentDayKey) {
-  const timeline = currentData.schedule.timeline;
-  const dayItems = timeline.filter(slot => slot.items[currentDayKey]);
+  // 💡 改用物件形式安全的取出當日行程陣列
+  const timelineObj = currentData.schedule.timeline || {};
+  const dayItems = timelineObj[currentDayKey] || [];
   
   const cleanTargetName = getCleanSpotName(itemName);
-  const currentIdx = dayItems.findIndex(slot => getCleanSpotName(slot.items[currentDayKey]) === cleanTargetName);
+  // 💡 注意：新結構中的 slot 是一個物件，其名稱存在 slot.name 中
+  const currentIdx = dayItems.findIndex(slot => getCleanSpotName(slot.name) === cleanTargetName);
 
   if (currentIdx === -1 || currentIdx >= dayItems.length - 1) {
     return `
@@ -258,7 +260,7 @@ export function renderNextStepModule(itemName, currentDayKey) {
   }
 
   const nextSlot = dayItems[currentIdx + 1];
-  const nextRawName = nextSlot.items[currentDayKey];
+  const nextRawName = nextSlot.name; // 透過 slot.name 取得下一站名稱
   const isNextTransport = nextRawName.includes('→') || nextRawName.includes('➔');
 
   if (isNextTransport) {
