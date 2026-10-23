@@ -60,7 +60,7 @@ export function renderApp() {
 }
 
 /* ----------------------------------------------------
-   第一層：時間軸卡片渲染
+   第一層：時間軸卡片渲染 (整合每日體能與步數預警看板)
 ---------------------------------------------------- */
 export function renderTimeline(currentDayKey) {
   console.log('正在渲染 Day:', currentDayKey);
@@ -69,24 +69,55 @@ export function renderTimeline(currentDayKey) {
 
   const timeline = currentData.schedule.timeline;
   let dayItems = [];
+  let fitnessInfo = null;
 
-  // 🛡️ 防禦性編程護城河：同時兼容「舊陣列格式」與「新物件格式」
+  // 🛡️ 防禦性編程護城河：同時兼容舊陣列格式與新物件格式 ({ items, fitness })
   if (Array.isArray(timeline)) {
-    // 舊結構防護：如果是陣列，用 .filter
     dayItems = timeline.filter(slot => slot.items && slot.items[currentDayKey]);
   } else if (timeline && typeof timeline === 'object') {
-    // 新結構：如果是物件，直接以日期 Key 取出陣列
-    dayItems = timeline[currentDayKey] || [];
+    const dayContent = timeline[currentDayKey];
+    if (Array.isArray(dayContent)) {
+      dayItems = dayContent;
+    } else if (dayContent && typeof dayContent === 'object') {
+      dayItems = dayContent.items || [];
+      fitnessInfo = dayContent.fitness || null;
+    }
   }
 
   if (dayItems.length === 0) {
     container.innerHTML = '<div class="text-center text-slate-400 py-12 text-lg">☕ 本日尚無排定行程</div>';
     return;
   }
+
+  // 💡 產生每日體能與步數預警看板 HTML
+  let fitnessBannerHTML = '';
+  if (fitnessInfo && fitnessInfo.summaryText) {
+    // 依據燈號狀態自動切換卡片顏色主題
+    let cardStyle = 'bg-emerald-950/40 border-emerald-800/60 text-emerald-300';
+    if (fitnessInfo.status && fitnessInfo.status.includes('🔴')) {
+      cardStyle = 'bg-rose-950/40 border-rose-800/60 text-rose-300';
+    } else if (fitnessInfo.status && fitnessInfo.status.includes('🟡')) {
+      cardStyle = 'bg-amber-950/40 border-amber-800/60 text-amber-300';
+    }
+
+    fitnessBannerHTML = `
+      <div class="mb-5 p-4 rounded-2xl border ${cardStyle} shadow-lg flex items-center justify-between gap-2 backdrop-blur-sm relative z-20">
+        <div class="flex items-center gap-3">
+          <span class="text-2xl">🏃‍♂️</span>
+          <div>
+            <div class="text-[11px] font-black uppercase tracking-wider opacity-80">每日體能與步數預警看板</div>
+            <div class="text-sm md:text-base font-black mt-0.5">${fitnessInfo.summaryText}</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   const dateObj = new Date(currentDayKey);
   const weekKey = WEEK_KEYS[dateObj.getDay()] || '';
 
-  container.innerHTML = dayItems.map((slot, idx) => {
+  // 將體能看板置於最上方，接著渲染行程列表
+  container.innerHTML = fitnessBannerHTML + dayItems.map((slot, idx) => {
     // 💡 修正：新結構中 slot 直接就是單一行程物件 { time, name, duration, departure, notice }
     const rawName = slot.name; 
     const isTransport = rawName.includes('→') || rawName.includes('➔');
@@ -238,7 +269,6 @@ export function renderTimeline(currentDayKey) {
     `;
   }).join('');
 }
-
 /* ----------------------------------------------------
    順遊下一站小模組
 ---------------------------------------------------- */
