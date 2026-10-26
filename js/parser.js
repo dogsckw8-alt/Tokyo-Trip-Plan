@@ -20,11 +20,11 @@
     }
 
     export function getBetweenSpotsTransport(currentData, fromSpot, toSpot) {
-      if (!currentData || !currentData.transports || !fromSpot || !toSpot) return null;
+      if (!currentData || !currentData.transport || !fromSpot || !toSpot) return null;
       
       const cleanFrom = getCleanSpotName(fromSpot);
       const cleanTo = getCleanSpotName(toSpot);
-      const tMap = currentData.transports;
+      const tMap = currentData.transport;
 
       if (tMap[`${cleanFrom}➔${cleanTo}`]) return tMap[`${cleanFrom}➔${cleanTo}`];
       if (tMap[`${cleanFrom}→${cleanTo}`]) return tMap[`${cleanFrom}→${cleanTo}`];

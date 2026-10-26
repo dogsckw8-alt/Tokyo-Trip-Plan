@@ -889,8 +889,8 @@ function findTransportInfo(fullRoute, routeParts) {
 
   if (tMap[`${from}➔${to}`]) return tMap[`${from}➔${to}`];
   if (tMap[`${from}→${to}`]) return tMap[`${from}→${to}`];
-  console.warn("❌ 找不到對應的交通資料:", fullRoute);
-  
+
+
   for (const key in tMap) {
     const item = tMap[key];
     if (item && item.From && item.To) {
@@ -899,6 +899,7 @@ function findTransportInfo(fullRoute, routeParts) {
       }
     }
   }
+  console.warn("❌ 找不到對應的交通資料:", fullRoute);
   return {};
 }
 
