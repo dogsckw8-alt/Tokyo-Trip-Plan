@@ -1,5 +1,5 @@
 /**
- * 東京 7 天行程 Web App - 後端 API (支援區塊式垂直排列與 4 欄架構，已修復 1899 時間異常)
+ * 東京 7 天行程 Web App - 後端 API (動態掃描所有日期欄位，完美整合體能與步數預警)
  */ 
 
 function doGet(e) {
@@ -23,7 +23,7 @@ function doGet(e) {
       schedule: scheduleData,
       restaurants: dbMapped.restaurants,
       attractions: dbMapped.attractions,
-      transports: transMap
+      transport: transMap
     }; 
 
     return ContentService.createTextOutput(JSON.stringify(result))
@@ -38,20 +38,148 @@ function doGet(e) {
 } 
 
 /**
- * 解析 Main_TravelPlan (完美對應 A=Time, B=Name, C=Duration, D=Departure 的 4 欄區塊結構)
+ * 1. 核心體能計算子函數：改用動態標題與安全對應抓取 Transport 數據
+ */
+function calculateFitnessForItems(items) {
+  if (!items || items.length === 0) {
+    return {
+      totalSteps: 0,
+      totalWalkMin: 0,
+      totalDistM: 0,
+      status: "🟢 輕鬆漫遊",
+      summaryText: "🟢 輕鬆漫遊 | 預估步數: 0 步 | 總步行: 0 分鐘 (0.0 km)"
+    };
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const dbSheet = ss.getSheetByName("Database");
+  const transportSheet = ss.getSheetByName("Transport");
+
+  // 建立 Database 查找對照表
+  const dbMap = {};
+  if (dbSheet) {
+    const dbData = dbSheet.getDataRange().getValues();
+    for (let i = 1; i < dbData.length; i++) {
+      const name = String(dbData[i][1]).trim();
+      const indoorLoad = dbData[i][40] !== undefined ? String(dbData[i][40]).trim().toLowerCase() : 'light';
+      dbMap[name] = indoorLoad;
+    }
+  }
+
+  // 建立 Transport 查找對照表（使用動態欄位標題尋找，避免硬編碼出錯）
+  const transMap = {};
+  if (transportSheet) {
+    const tData = transportSheet.getDataRange().getValues();
+    if (tData.length > 1) {
+      const headers = tData[0].map(h => String(h).trim());
+      
+      // 定義欄位索引：優先尋找對應名稱，若找不到則採用你指定的預設對應 (T=19, P=15, Q=16, R=17)
+      let colRouteKey = headers.indexOf('Route_Key');
+      if (colRouteKey === -1) colRouteKey = 19; // T 欄
+
+      let colDistM = headers.indexOf('walk_dist_m');
+      if (colDistM === -1) colDistM = 15; // P 欄
+
+      let colTimeMin = headers.indexOf('walk_time_min');
+      if (colTimeMin === -1) colTimeMin = 16; // Q 欄
+
+      let colDiffLoad = headers.indexOf('difficulty_load');
+      if (colDiffLoad === -1) colDiffLoad = 17; // R 欄
+
+      for (let i = 1; i < tData.length; i++) {
+        const row = tData[i];
+        const routeKey = String(row[colRouteKey] || '').trim();
+        if (!routeKey) continue;
+
+        const distM = Number(row[colDistM]) || 0;
+        const timeMin = Number(row[colTimeMin]) || 0;
+        const diffLoad = Number(row[colDiffLoad]) || 0;
+
+        transMap[routeKey] = { distM, timeMin, diffLoad };
+        
+        // 同時支援雙向或常見的符號替換
+        transMap[routeKey.replace(/➔/g, '→')] = { distM, timeMin, diffLoad };
+        transMap[routeKey.replace(/→/g, '➔')] = { distM, timeMin, diffLoad };
+      }
+    }
+  }
+
+  let totalDistM = 0;
+  let totalWalkMin = 0;
+  let totalSteps = 0;
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const name = item.name;
+    const isTransport = name.includes('→') || name.includes('➔');
+
+    if (isTransport) {
+      const cleanRoute = name.replace(/→/g, '➔').trim();
+      const tInfo = transMap[cleanRoute] || transMap[cleanRoute.replace(/➔/g, '→')] || { distM: 0, timeMin: 5, diffLoad: 0 };
+      
+      let legDist = tInfo.distM;
+      let legTime = tInfo.timeMin + tInfo.diffLoad; // 將 difficulty_load 加進步行時間
+      
+      if (legDist === 0 && legTime > 0) {
+        legDist = legTime * 75; // 若沒有填寫距離，以每分鐘 75 米估算
+      }
+
+      totalDistM += legDist;
+      totalWalkMin += legTime;
+      totalSteps += (legDist / 0.7); // 以每步 0.7 米計算
+
+    } else {
+      const durationMins = Number(item.duration) || 60;
+      const indoorLoad = dbMap[name] || 'light';
+      
+      let ratePerH = 150;
+      if (indoorLoad === 'moderate') ratePerH = 500;
+      if (indoorLoad === 'heavy') ratePerH = 1200;
+
+      const indoorDist = (durationMins / 60) * ratePerH;
+      const indoorTime = indoorDist / 75;
+
+      totalDistM += indoorDist;
+      totalWalkMin += indoorTime;
+      totalSteps += (indoorDist / 0.7);
+    }
+  }
+
+  totalDistM = Math.round(totalDistM);
+  totalWalkMin = Math.round(totalWalkMin);
+  totalSteps = Math.round(totalSteps);
+
+  let status = "🟢 輕鬆漫遊";
+  if (totalSteps >= 12000 && totalSteps < 15000) {
+    status = "🟡 步行適中 (注意長輩體力)";
+  } else if (totalSteps >= 15000) {
+    status = "🔴 體能超載警示 (>1.5萬步，建議加插休息)";
+  }
+
+  const summaryText = `${status} | 預估步數: ${totalSteps.toLocaleString()} 步 | 總步行: ${totalWalkMin} 分鐘 (${(totalDistM/1000).toFixed(1)} km)`;
+
+  return {
+    totalSteps: totalSteps,
+    totalWalkMin: totalWalkMin,
+    totalDistM: totalDistM,
+    status: status,
+    summaryText: summaryText
+  };
+}
+/**
+ * 2. 行程結構解析函數 (使用動態逐欄掃描，完整對應所有日期區塊)
  */
 function parseBlockSchedule(sheet) {
-  // 【關鍵改進 1】同時取得原始值與顯示值 (DisplayValues)，徹底解決 1899 年時間戳問題
   const data = sheet.getDataRange().getValues();
   const displayData = sheet.getDataRange().getDisplayValues();
   
-  if (data.length < 3) return { days: [], timeline: {} }; 
+  if (data.length < 2) return { days: [], timeline: {} }; 
 
-  const headerRow = data[0]; // 第 1 列：跨欄置中的日期
+  const headerRow = data[0];
   const daysData = {};
   const daysList = []; 
 
-  // 掃描第 1 列，找出所有日期標頭的位置（每 4 個欄位為一個區塊的開頭 A 欄）
+  // 💡 改為逐欄掃描，確保不會漏掉任何一天的區塊
   for (let c = 0; c < headerRow.length; c++) {
     let cellVal = headerRow[c];
     if (cellVal instanceof Date) {
@@ -59,7 +187,6 @@ function parseBlockSchedule(sheet) {
     }
     const headerStr = String(cellVal).trim(); 
 
-    // 判斷是否為日期格式 (例如 2026-12-13)
     if (/^\d{4}-\d{2}-\d{2}$/.test(headerStr)) {
       const dayKey = headerStr;
       daysList.push(dayKey); 
@@ -69,16 +196,26 @@ function parseBlockSchedule(sheet) {
       const durationCol = c + 2;
       const departureCol = c + 3; 
 
+      // 動態定位 "Time" 或 "Name" 標題列
+      let startRow = 2; 
+      for (let r = 0; r < data.length; r++) {
+        const val = data[r][nameCol] !== undefined ? String(data[r][nameCol]).trim() : '';
+        if (val === 'Name' || val === 'Time') {
+          startRow = r + 1; 
+          break;
+        }
+      }
+
       const items = []; 
-
-      // 從第 3 列開始讀取資料 (index 2 之後)
-      for (let r = 2; r < data.length; r++) {
+      for (let r = startRow; r < data.length; r++) {
+        if (!data[r] || nameCol >= data[r].length) continue;
+        
         const nameRaw = data[r][nameCol] !== undefined ? String(data[r][nameCol]).trim() : ''; 
+        // 🛡️ 略過空白、NaN、標題，同時過濾掉體能預警摘要文字行以免被誤認為景點
+        if (!nameRaw || nameRaw === 'NaN' || nameRaw === 'Name' || nameRaw === 'Time' || nameRaw.includes('🟢') || nameRaw.includes('🟡') || nameRaw.includes('🔴')) {
+          continue;
+        }
 
-        // 如果 Name 欄是空白、或是剛好讀到表頭文字，就跳過
-        if (!nameRaw || nameRaw === 'NaN' || nameRaw === 'Name' || nameRaw === 'Time') continue; 
-
-        // 處理格式：名稱|備註 (例如 "沾麵あいだや|17:15排隊")
         let spotName = nameRaw;
         let notice = '';
         if (nameRaw.includes('|')) {
@@ -87,11 +224,9 @@ function parseBlockSchedule(sheet) {
           notice = parts.slice(1).join('|').trim();
         } 
 
-        // 【關鍵改進 2】改用 getDisplayValues() 抓取畫面上看到的乾淨時間字串（如 "09:00"），避免 1899-12-30 雜訊
         let arrivalTime = displayData[r][timeCol] ? String(displayData[r][timeCol]).trim() : '';
         let departureTime = displayData[r][departureCol] ? String(displayData[r][departureCol]).trim() : '';
 
-        // 額外保險：如果還是抓到帶有 1899 的字串，進行正規化清洗
         arrivalTime = cleanTimeString(arrivalTime);
         departureTime = cleanTimeString(departureTime);
 
@@ -106,7 +241,13 @@ function parseBlockSchedule(sheet) {
         });
       } 
 
-      daysData[dayKey] = items;
+      // 計算該日體能數據並封裝
+      const fitnessInfo = calculateFitnessForItems(items);
+
+      daysData[dayKey] = {
+        items: items,
+        fitness: fitnessInfo
+      };
     }
   } 
 
@@ -117,31 +258,91 @@ function parseBlockSchedule(sheet) {
 }
 
 /**
- * 【新增輔助函數】清洗可能含有 1899 或完整 ISO 日期格式的時間字串
+ * 3. 試算表自訂函數
+ */
+function CALCULATE_DAY_FITNESS(dayKey) {
+  if (dayKey instanceof Date) {
+    dayKey = Utilities.formatDate(dayKey, "Asia/Tokyo", "yyyy-MM-dd");
+  } else {
+    dayKey = String(dayKey).trim();
+  }
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("Main_TravelPlan");
+  if (!sheet) return "🟢 輕鬆漫遊 | 預估步數: 0 步 | 總步行: 0 分鐘 (0.0 km)";
+  
+  const parsed = parseBlockSchedule(sheet);
+  const dayObj = parsed.timeline[dayKey];
+  if (!dayObj) return "🟢 輕鬆漫遊 | 預估步數: 0 步 | 總步行: 0 分鐘 (0.0 km)";
+  
+  return dayObj.fitness;
+}
+
+function GET_DAY_FITNESS_SUMMARY(dayKey) {
+  const res = CALCULATE_DAY_FITNESS(dayKey);
+  if (typeof res === 'string') return res;
+  return res.summaryText;
+}
+
+/**
+ * 🧪 測試函數
+ */
+function testParser() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("Main_TravelPlan");
+  if (!sheet) {
+    Logger.log("❌ 找不到 Main_TravelPlan 工作表");
+    return;
+  }
+  
+  const startTime = new Date().getTime();
+  const result = parseBlockSchedule(sheet);
+  const endTime = new Date().getTime();
+  
+  Logger.log(`⏱️ 執行耗時: ${endTime - startTime} ms`);
+  Logger.log("📦 抓取到的所有日期: " + JSON.stringify(result.days));
+  Logger.log("📦 解析結果預覽 (JSON):");
+  Logger.log(JSON.stringify(result, null, 2));
+}
+
+function testFitnessFunction() {
+  var testDayKey = "2026-12-14"; 
+  
+  Logger.log("========== 開始測試日行程體能計算 ==========");
+  var startTime = new Date().getTime();
+  
+  var result = CALCULATE_DAY_FITNESS(testDayKey);
+  Logger.log("CALCULATE_DAY_FITNESS 結果: " + JSON.stringify(result));
+  
+  var summary = GET_DAY_FITNESS_SUMMARY(testDayKey);
+  Logger.log("GET_DAY_FITNESS_SUMMARY 結果: " + summary);
+  
+  var endTime = new Date().getTime();
+  Logger.log(`⏱️ 總耗時: ${endTime - startTime} ms`);
+  Logger.log("========== 測試結束 ==========");
+}
+
+/**
+ * 【輔助函數】清洗時間字串
  */
 function cleanTimeString(str) {
   if (!str) return '';
-  // 如果字串包含時間格式 (例如 1899-12-30T10:30:00.000Z 或 Sat Dec 30 1899...)
   if (str.includes('1899') || str.includes('T')) {
-    const match = str.match(/(\d{2}:\d{2})/); // 嘗試抓取其中的 HH:mm
+    const match = str.match(/(\d{2}:\d{2})/);
     if (match) return match[1];
   }
   return str;
 }
 
-// 針對支援 25:00 累計小時的時間解析函數
 function formatCellTimeCumulative(val) {
   if (val === null || val === undefined || val === '') return '';
 
   if (val instanceof Date) {
-    // 若為 Date 物件，若有跨日可能需額外判斷，此處以一般時間為主
     const hours = String(val.getUTCHours()).padStart(2, '0');
     const minutes = String(val.getUTCMinutes()).padStart(2, '0');
     return `${hours}:${minutes}`;
   }
 
   if (typeof val === 'number') {
-    // 關鍵：不取餘數，讓總小時數持續累計（例如 25.5 小時 -> 25:30）
     const totalMinutes = Math.round(val * 24 * 60);
     const hours = Math.floor(totalMinutes / 60); 
     const minutes = totalMinutes % 60;
@@ -151,7 +352,7 @@ function formatCellTimeCumulative(val) {
   return String(val).trim();
 }
 
-// 解析 Database (正規化星期欄位，並自動合併多段時間)
+// 解析 Database
 function parseDatabase(sheet) {
   const data = sheet.getDataRange().getValues();
   if (data.length < 2) return { restaurants: {}, attractions: {} }; 
@@ -231,9 +432,7 @@ function parseDatabase(sheet) {
   return { restaurants: restaurants, attractions: attractions };
 } 
 
-/**
- * 解析 Transport
- */
+// 解析 Transport
 function parseTransportSheet(sheet) {
   const data = sheet.getDataRange().getValues();
   if (data.length < 2) return {}; 
@@ -257,4 +456,189 @@ function parseTransportSheet(sheet) {
     }
   }
   return map;
+}
+
+
+
+/**
+ * 🔍 white box test for Fitness Process
+ */
+function testFitnessTraceProcess() {
+  var testDayKey = "2026-12-13"; // 🎯 你可以隨時修改這裡想測試的日期
+  
+  Logger.log("==================================================");
+  Logger.log("🔍 開始追蹤日期: " + testDayKey + " 的體能計算詳細過程");
+  Logger.log("==================================================");
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const scheduleSheet = ss.getSheetByName("Main_TravelPlan");
+  const dbSheet = ss.getSheetByName("Database");
+  const transportSheet = ss.getSheetByName("Transport");
+  
+  if (!scheduleSheet) {
+    Logger.log("❌ 找不到 Main_TravelPlan 工作表");
+    return;
+  }
+
+  // 1. 取得解析後的行程資料 (對應 parseBlockSchedule 的回傳結構)
+  const parsedData = parseBlockSchedule(scheduleSheet);
+  const dayDataObj = parsedData.timeline ? parsedData.timeline[testDayKey] : null;
+  const dayItems = dayDataObj ? dayDataObj.items : null;
+  
+  if (!dayItems || dayItems.length === 0) {
+    Logger.log(`⚠️ 日期 ${testDayKey} 找不到任何行程資料！`);
+    return;
+  }
+
+  Logger.log(`📋 找到 ${dayItems.length} 個行程項目，開始逐筆解析對照...\n`);
+
+  // 2. 建立 Database 查找對照表
+  const dbMap = {};
+  if (dbSheet) {
+    const dbData = dbSheet.getDataRange().getValues();
+    for (let i = 1; i < dbData.length; i++) {
+      const name = String(dbData[i][1]).trim();
+      const indoorLoad = dbData[i][40] !== undefined ? String(dbData[i][40]).trim().toLowerCase() : 'light';
+      dbMap[name] = indoorLoad;
+    }
+  }
+
+  // 3. 建立 Transport 查找對照表
+  const transMap = {};
+  if (transportSheet) {
+    const tData = transportSheet.getDataRange().getValues();
+    for (let i = 1; i < tData.length; i++) {
+      const routeKey = String(tData[i][19]).trim(); // T 欄
+      const distM = Number(tData[i][15]) || 0;     // P 欄
+      const timeMin = Number(tData[i][16]) || 0;   // Q 欄
+      const diffLoad = Number(tData[i][17]) || 0;  // R 欄
+      transMap[routeKey] = { distM, timeMin, diffLoad };
+    }
+  }
+
+  let totalDistM = 0;
+  let totalWalkMin = 0;
+  let totalSteps = 0;
+
+  // 4. 逐筆迴圈追蹤計算
+  for (let i = 0; i < dayItems.length; i++) {
+    const item = dayItems[i];
+    const name = item.name;
+    const isTransport = name.includes('→') || name.includes('➔');
+
+    Logger.log(`--------------------------------------------------`);
+    Logger.log(`📌 項目 [${i + 1}]: ${name} (時間: ${item.time} ~ ${item.departure}, 停留: ${item.duration}分)`);
+
+    if (isTransport) {
+      const cleanRoute = name.replace(/→/g, '➔').trim();
+      const tInfo = transMap[cleanRoute] || { distM: 0, timeMin: 5, diffLoad: 0 };
+      
+      let legDist = tInfo.distM;
+      let legTime = tInfo.timeMin + tInfo.diffLoad;
+      
+      Logger.log(`   [交通類型] 匹配 Route_Key: "${cleanRoute}"`);
+      Logger.log(`   ➡️ 原始數據: 距離(P欄)=${tInfo.distM}m, 基本步行(Q欄)=${tInfo.timeMin}分, 難度系數(R欄)=${tInfo.diffLoad}分`);
+
+      if (legDist === 0 && legTime > 0) {
+        legDist = legTime * 75;
+        Logger.log(`   ⚠️ 距離為 0，改用時間自動估算距離: ${legTime}分 × 75m = ${legDist}m`);
+      }
+
+      const legSteps = legDist / 0.7;
+      totalDistM += legDist;
+      totalWalkMin += legTime;
+      totalSteps += legSteps;
+
+      Logger.log(`   ✅ 本段結算: 步行時間 ${legTime} 分鐘 | 距離 ${legDist} 公尺 | 預估步數 ${Math.round(legSteps)} 步`);
+
+    } else {
+      const durationMins = Number(item.duration) || 60;
+      const indoorLoad = dbMap[name] || 'light';
+      
+      let ratePerH = 150;
+      if (indoorLoad === 'moderate') ratePerH = 500;
+      if (indoorLoad === 'heavy') ratePerH = 1200;
+
+      const indoorDist = (durationMins / 60) * ratePerH;
+      const indoorTime = indoorDist / 75;
+      const indoorSteps = indoorDist / 0.7;
+
+      totalDistM += indoorDist;
+      totalWalkMin += indoorTime;
+      totalSteps += indoorSteps;
+
+      Logger.log(`   [景點/餐廳類型] 匹配 Database: indoor_walk_load = [${indoorLoad}] (每小時速率: ${ratePerH}m)`);
+      Logger.log(`   ➡️ 停留時間: ${durationMins} 分鐘`);
+      Logger.log(`   ✅ 本段結算: 相當步行時間 ${Math.round(indoorTime)} 分鐘 | 內部走動距離 ${Math.round(indoorDist)} 公尺 | 預估步數 ${Math.round(indoorSteps)} 步`);
+    }
+  }
+
+  // 5. 最終總結算
+  totalDistM = Math.round(totalDistM);
+  totalWalkMin = Math.round(totalWalkMin);
+  totalSteps = Math.round(totalSteps);
+
+  let status = "🟢 輕鬆漫遊";
+  if (totalSteps >= 12000 && totalSteps < 15000) {
+    status = "🟡 步行適中 (注意長輩體力)";
+  } else if (totalSteps >= 15000) {
+    status = "🔴 體能超載警示 (>1.5萬步，建議加插休息)";
+  }
+
+  Logger.log("\n==================================================");
+  Logger.log("🎯 【最終加總結果】");
+  Logger.log("   • 總步行距離: " + totalDistM + " 公尺 (" + (totalDistM/1000).toFixed(1) + " km)");
+  Logger.log("   • 總步行時間: " + totalWalkMin + " 分鐘");
+  Logger.log("   • 預估總步數: " + totalSteps.toLocaleString() + " 步");
+  Logger.log("   • 體能燈號狀態: " + status);
+  Logger.log("   • 最終摘要字串: " + GET_DAY_FITNESS_SUMMARY(testDayKey));
+  Logger.log("==================================================");
+}
+
+
+function testTransportSheetDebug() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const transportSheet = ss.getSheetByName("Transport");
+  
+  if (!transportSheet) {
+    Logger.log("❌ 找不到 Transport 工作表！請檢查工作表名稱是否正確（例如大小寫或有無多餘空白）。");
+    return;
+  }
+  
+  const tData = transportSheet.getDataRange().getValues();
+  if (tData.length < 2) {
+    Logger.log("⚠️ Transport 工作表資料列數不足！");
+    return;
+  }
+  
+  // 1. 印出標題列與對應的欄位 Index
+  const headers = tData[0].map(h => String(h).trim());
+  Logger.log("📋 Transport 標題列清單: " + JSON.stringify(headers));
+  
+  Logger.log(`- Route_Key 索引: ${headers.indexOf('Route_Key')}`);
+  Logger.log(`- walk_dist_m 索引: ${headers.indexOf('walk_dist_m')}`);
+  Logger.log(`- walk_time_min 索引: ${headers.indexOf('walk_time_min')}`);
+  Logger.log(`- difficulty_load 索引: ${headers.indexOf('difficulty_load')}`);
+  
+  // 2. 尋找特定的路線（例如 "元箱根港➔小田原" 或類似的）
+  let found = false;
+  for (let i = 1; i < tData.length; i++) {
+    const row = tData[i];
+    const rowStr = row.join(" | ");
+    // 檢查這一行是否包含關鍵字
+    if (rowStr.includes("元箱根港") || rowStr.includes("小田原")) {
+      found = true;
+      Logger.log(`\n🔍 找到相關行 [Row ${i + 1}]:`);
+      Logger.log("   整行原始資料: " + JSON.stringify(row));
+      // 依據你提供的對應印出 P(15), Q(16), R(17), T(19)
+      Logger.log(`   [T 欄 / index 19] Route_Key 內容: "${row[19]}"`);
+      Logger.log(`   [P 欄 / index 15] walk_dist_m 內容: "${row[15]}" (型態: ${typeof row[15]})`);
+      Logger.log(`   [Q 欄 / index 16] walk_time_min 內容: "${row[16]}" (型態: ${typeof row[16]})`);
+      Logger.log(`   [R 欄 / index 17] difficulty_load 內容: "${row[17]}" (型態: ${typeof row[17]})`);
+    }
+  }
+  
+  if (!found) {
+    Logger.log("⚠️ 在 Transport 表格中找不到包含 '元箱根港' 或 '小田原' 的行，請確認表格內的文字內容與路由 Key 是否正確！");
+  }
 }
