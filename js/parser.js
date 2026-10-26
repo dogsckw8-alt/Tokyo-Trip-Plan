@@ -280,7 +280,7 @@ export function parseCellContent(rawInput) {
       }
 
       // 保持原本的字串解析相容性
-      if (!rawString) return { spotName: '', subTitle: '', notice: '', openTime: null, queueTime: null, leaveTime: null };
+      if (!rawInput) return { spotName: '', subTitle: '', notice: '', openTime: null, queueTime: null, leaveTime: null };
       
       const parts = String(rawString).split('|').map(s => s.trim());
       const spotName = parts[0] || '';
