@@ -651,6 +651,7 @@ export function openTransportModal(fullRoute) {
     stepsContainer.classList.remove('hidden');
     stepsContainer.innerHTML = segments.map((seg, idx) => {
       const info = seg.info || {};
+      console.log(`第 ${idx + 1} 段交通 info 物件內容:`, info);
       const timeFormatted = formatMins(info.Time || info.Duration);
       const timetableRaw = info.Timetable || info['特定班次'] || info.TimeTable || '';
       const parsedTimetables = parseTimetableList(timetableRaw);
