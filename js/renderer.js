@@ -273,12 +273,23 @@ export function renderTimeline(currentDayKey) {
    順遊下一站小模組
 ---------------------------------------------------- */
 export function renderNextStepModule(itemName, currentDayKey) {
-  // 💡 改用物件形式安全的取出當日行程陣列
-  const timelineObj = currentData.schedule.timeline || {};
-  const dayItems = timelineObj[currentDayKey] || [];
-  
+  const timeline = currentData.schedule.timeline || {};
+  let dayItems = [];
+
+  // 🛡️ 防禦性編程：完美兼容新舊格式，安全取出當日行程陣列
+  if (Array.isArray(timeline)) {
+    const foundDay = timeline.find(slot => slot.items && slot.items[currentDayKey]);
+    if (foundDay) dayItems = foundDay.items[currentDayKey] || [];
+  } else if (timeline && typeof timeline === 'object') {
+    const dayContent = timeline[currentDayKey];
+    if (Array.isArray(dayContent)) {
+      dayItems = dayContent;
+    } else if (dayContent && typeof dayContent === 'object') {
+      dayItems = dayContent.items || [];
+    }
+  }
+
   const cleanTargetName = getCleanSpotName(itemName);
-  // 💡 注意：新結構中的 slot 是一個物件，其名稱存在 slot.name 中
   const currentIdx = dayItems.findIndex(slot => getCleanSpotName(slot.name) === cleanTargetName);
 
   if (currentIdx === -1 || currentIdx >= dayItems.length - 1) {
@@ -290,9 +301,10 @@ export function renderNextStepModule(itemName, currentDayKey) {
   }
 
   const nextSlot = dayItems[currentIdx + 1];
-  const nextRawName = nextSlot.name; // 透過 slot.name 取得下一站名稱
+  const nextRawName = nextSlot.name; 
   const isNextTransport = nextRawName.includes('→') || nextRawName.includes('➔');
 
+  // 下方保持原本的邏輯不變...
   if (isNextTransport) {
     const cleanRoute = getCleanSpotName(nextRawName);
     return `
@@ -337,7 +349,6 @@ export function renderNextStepModule(itemName, currentDayKey) {
     `;
   }
 }
-
 /* ----------------------------------------------------
    第二層：景點/餐廳 Modal 彈窗
 ---------------------------------------------------- */
