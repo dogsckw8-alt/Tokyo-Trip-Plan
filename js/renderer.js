@@ -877,10 +877,8 @@ function findTransportInfo(fullRoute, routeParts) {
     return {};
   }
   const tMap = currentData.transport;
-  console.log("🔍 正在尋找路線 Key:", fullRoute, "可用清單:", Object.keys(tMap));
 
   if (tMap[fullRoute]) {
-    console.log("✅ 成功直接匹配:", fullRoute, tMap[fullRoute]);
     return tMap[fullRoute];
   }
 
