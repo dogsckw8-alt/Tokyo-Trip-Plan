@@ -871,17 +871,26 @@ export function closeModalDirect() {
    內部輔助小工具 (Helpers)
 ---------------------------------------------------- */
 function findTransportInfo(fullRoute, routeParts) {
-  if (!currentData || !currentData.transports) return {};
-  const tMap = currentData.transports;
+// 🛡️ 修正屬性名稱：確認前端使用的是 currentData.transport
+  if (!currentData || !currentData.transport) {
+    console.warn("⚠️ 警告：currentData.transport 資料不存在或尚未載入！");
+    return {};
+  }
+  const tMap = currentData.transport;
+  console.log("🔍 正在尋找路線 Key:", fullRoute, "可用清單:", Object.keys(tMap));
 
-  if (tMap[fullRoute]) return tMap[fullRoute];
+  if (tMap[fullRoute]) {
+    console.log("✅ 成功直接匹配:", fullRoute, tMap[fullRoute]);
+    return tMap[fullRoute];
+  }
 
   const from = routeParts[0] ? routeParts[0].trim() : '';
   const to = routeParts[routeParts.length - 1] ? routeParts[routeParts.length - 1].trim() : '';
 
   if (tMap[`${from}➔${to}`]) return tMap[`${from}➔${to}`];
   if (tMap[`${from}→${to}`]) return tMap[`${from}→${to}`];
-
+  console.warn("❌ 找不到對應的交通資料:", fullRoute);
+  
   for (const key in tMap) {
     const item = tMap[key];
     if (item && item.From && item.To) {
